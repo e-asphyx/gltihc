@@ -10,12 +10,12 @@ import (
 	"os"
 	"path"
 
-	"github.com/e-asphyx/gltihc/gltihc"
+	"github.com/e-asphyx/gltihc/engine"
 )
 
 func main() {
 	var (
-		opt    gltihc.Options
+		opt    engine.Options
 		prefix string
 		copies int
 	)
@@ -42,12 +42,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := reader.Close(); err != nil {
+	source, _, err := image.Decode(reader)
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	source, _, err := image.Decode(reader)
-	if err != nil {
+	if err := reader.Close(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -56,7 +56,7 @@ func main() {
 		ln++
 	}
 	for c := 0; c < copies; c++ {
-		res := gltihc.Apply(source, &opt)
+		res := engine.Apply(source, &opt)
 
 		outname := fmt.Sprintf("%s%0*d.png", prefix, ln, c)
 		f, err := os.Create(outname)

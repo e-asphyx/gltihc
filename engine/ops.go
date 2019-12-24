@@ -1,4 +1,4 @@
-package glithc
+package engine
 
 import "image/color"
 
@@ -35,9 +35,16 @@ func opAdd(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
-	sr = (sr*0xffff)/sa + (dr*0xffff)/da
-	sg = (sg*0xffff)/sa + (dg*0xffff)/da
-	sb = (sb*0xffff)/sa + (db*0xffff)/da
+	if sa != 0 {
+		sr = (sr * 0xffff) / sa
+		sg = (sg * 0xffff) / sa
+		sb = (sb * 0xffff) / sa
+	}
+	if da != 0 {
+		sr += (dr * 0xffff) / da
+		sg += (dg * 0xffff) / da
+		sb += (db * 0xffff) / da
+	}
 	if sr > 0xffff {
 		sr = 0xffff
 	}
@@ -62,9 +69,19 @@ func opAddRGBMod(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
-	sr = ((sr*0xffff)/sa + (dr*0xffff)/da) & 0xffff
-	sg = ((sg*0xffff)/sa + (dg*0xffff)/da) & 0xffff
-	sb = ((sb*0xffff)/sa + (db*0xffff)/da) & 0xffff
+	if sa != 0 {
+		sr = (sr * 0xffff) / sa
+		sg = (sg * 0xffff) / sa
+		sb = (sb * 0xffff) / sa
+	}
+	if da != 0 {
+		sr += (dr * 0xffff) / da
+		sg += (dg * 0xffff) / da
+		sb += (db * 0xffff) / da
+	}
+	sr &= 0xffff
+	sg &= 0xffff
+	sb &= 0xffff
 	// Premultiply
 	sr = (sr * a) / 0xffff
 	sg = (sg * a) / 0xffff
@@ -96,9 +113,11 @@ func opMulRGB(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
-	sr = (((sr * 0xffff) / sa) * ((dr * 0xffff) / da)) / 0xffff
-	sg = (((sg * 0xffff) / sa) * ((dg * 0xffff) / da)) / 0xffff
-	sb = (((sb * 0xffff) / sa) * ((db * 0xffff) / da)) / 0xffff
+	if sa != 0 && da != 0 {
+		sr = (((sr * 0xffff) / sa) * ((dr * 0xffff) / da)) / 0xffff
+		sg = (((sg * 0xffff) / sa) * ((dg * 0xffff) / da)) / 0xffff
+		sb = (((sb * 0xffff) / sa) * ((db * 0xffff) / da)) / 0xffff
+	}
 	// Premultiply
 	sr = (sr * a) / 0xffff
 	sg = (sg * a) / 0xffff
@@ -130,9 +149,16 @@ func opXorRGB(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
-	sr = ((sr * 0xffff) / sa) ^ ((dr * 0xffff) / da)
-	sg = ((sg * 0xffff) / sa) ^ ((dg * 0xffff) / da)
-	sb = ((sb * 0xffff) / sa) ^ ((db * 0xffff) / da)
+	if sa != 0 {
+		sr = ((sr * 0xffff) / sa)
+		sg = ((sg * 0xffff) / sa)
+		sb = ((sb * 0xffff) / sa)
+	}
+	if da != 0 {
+		sr ^= ((dr * 0xffff) / da)
+		sg ^= ((dg * 0xffff) / da)
+		sb ^= ((db * 0xffff) / da)
+	}
 	// Premultiply
 	sr = (sr * a) / 0xffff
 	sg = (sg * a) / 0xffff

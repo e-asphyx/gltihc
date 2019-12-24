@@ -1,4 +1,4 @@
-package glithc
+package engine
 
 import (
 	"image"
