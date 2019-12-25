@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 
@@ -47,6 +48,7 @@ const (
 
 type Filter interface {
 	Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation)
+	String() string
 }
 
 type FilterOptions struct {
@@ -61,9 +63,13 @@ type filterColor color.RGBA
 func (f filterColor) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), color.RGBA(f)))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), color.RGBA(f)))
 		}
 	}
+}
+
+func (f filterColor) String() string {
+	return fmt.Sprintf("color:[%d,%d,%d,%d]", f.R, f.G, f.B, f.A)
 }
 
 func newFilterColor(opt *FilterOptions, rand Randn) Filter {
@@ -95,9 +101,13 @@ func (f filterSetRGBAComp) Apply(dst draw.Image, dr image.Rectangle, src image.I
 			g = (v[1] * a) / 0xffff
 			b = (v[2] * a) / 0xffff
 			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterSetRGBAComp) String() string {
+	return fmt.Sprintf("rgba:{%d:%d}", f.c, f.v)
 }
 
 func newFilterSetRGBAComp(opt *FilterOptions, rand Randn) Filter {
@@ -111,9 +121,13 @@ func (f filterSource) Apply(dst draw.Image, dr image.Rectangle, src image.Image,
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
 			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterSource) String() string {
+	return "src"
 }
 
 func newFilterSource(opt *FilterOptions, rand Randn) Filter {
@@ -132,9 +146,13 @@ func (f filterSetYCCComp) Apply(dst draw.Image, dr image.Rectangle, src image.Im
 			v := [3]uint8{ycc.Y, ycc.Cb, ycc.Cr}
 			v[f.c] = f.v
 			c := color.NYCbCrA{color.YCbCr{v[0], v[1], v[2]}, ycc.A}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterSetYCCComp) String() string {
+	return fmt.Sprintf("ycc:{%d:%d}", f.c, f.v)
 }
 
 func newFilterSetYCCComp(opt *FilterOptions, rand Randn) Filter {
@@ -158,9 +176,13 @@ func (f filterPermRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Imag
 			g = (v[f[1]] * a) / 0xffff
 			b = (v[f[2]] * a) / 0xffff
 			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterPermRGBA) String() string {
+	return fmt.Sprintf("prgba:[%d,%d,%d,%d]", f[0], f[1], f[2], f[3])
 }
 
 func newFilterPermRGBA(opt *FilterOptions, rand Randn) Filter {
@@ -185,9 +207,13 @@ func (f filterPermYCC) Apply(dst draw.Image, dr image.Rectangle, src image.Image
 			cb := v[f[1]]
 			cr := v[f[2]]
 			c := color.NYCbCrA{color.YCbCr{yy, cb, cr}, ycc.A}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterPermYCC) String() string {
+	return fmt.Sprintf("pycc:[%d,%d,%d]", f[0], f[1], f[2])
 }
 
 func newFilterPermYCC(opt *FilterOptions, rand Randn) Filter {
@@ -220,9 +246,18 @@ func (f filterMix) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp
 				bb = 0xffff
 			}
 			c := color.RGBA64{uint16(rr), uint16(gg), uint16(bb), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterMix) String() string {
+	return fmt.Sprintf(
+		"mix:[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]",
+		f[0][0], f[0][1], f[0][2],
+		f[1][0], f[1][1], f[1][2],
+		f[2][0], f[2][1], f[2][2],
+	)
 }
 
 func newFilterMix(opt *FilterOptions, rand Randn) Filter {
@@ -233,10 +268,10 @@ func newFilterMix(opt *FilterOptions, rand Randn) Filter {
 	}
 }
 
-type filterQuantRGBA [3]uint8
+type filterQuantRGBA [4]uint8
 
 func (f filterQuantRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	m := [3]uint32{1 << (f[0] + 8), 1 << (f[1] + 8), 1 << (f[2] + 8)}
+	m := [4]uint32{1 << (f[0] + 8), 1 << (f[1] + 8), 1 << (f[2] + 8), 1 << (f[3] + 8)}
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
@@ -248,7 +283,7 @@ func (f filterQuantRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 			r = (r + (m[0] >> 1)) &^ (m[0] - 1)
 			g = (g + (m[1] >> 1)) &^ (m[1] - 1)
 			b = (b + (m[2] >> 1)) &^ (m[2] - 1)
-			a = (a + (m[2] >> 1)) &^ (m[2] - 1)
+			a = (a + (m[3] >> 1)) &^ (m[3] - 1)
 			if r > 0xffff {
 				r = 0xffff
 			}
@@ -265,19 +300,23 @@ func (f filterQuantRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 			g = (g * a) / 0xffff
 			b = (b * a) / 0xffff
 			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
 }
 
-func newFilterQuantRGBA(opt *FilterOptions, rand Randn) Filter {
-	return filterQuantRGBA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
+func (f filterQuantRGBA) String() string {
+	return fmt.Sprintf("qrgba:[%d,%d,%d,%d]", f[0], f[1], f[2], f[3])
 }
 
-type filterQuantYCCA [3]uint8
+func newFilterQuantRGBA(opt *FilterOptions, rand Randn) Filter {
+	return filterQuantRGBA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
+}
+
+type filterQuantYCCA [4]uint8
 
 func (f filterQuantYCCA) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	m := [3]uint32{1 << f[0], 1 << f[1], 1 << f[2]}
+	m := [4]uint32{1 << f[0], 1 << f[1], 1 << f[2], 1 << f[3]}
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			s := src.At(sp.X+x, sp.Y+y)
@@ -285,7 +324,7 @@ func (f filterQuantYCCA) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 			yy := (uint32(ycc.Y) + (m[0] >> 1)) &^ (m[0] - 1)
 			cb := (uint32(ycc.Cb) + (m[1] >> 1)) &^ (m[1] - 1)
 			cr := (uint32(ycc.Cr) + (m[2] >> 1)) &^ (m[2] - 1)
-			a := (uint32(ycc.A) + (m[2] >> 1)) &^ (m[2] - 1)
+			a := (uint32(ycc.A) + (m[3] >> 1)) &^ (m[3] - 1)
 			if yy > 0xff {
 				yy = 0xff
 			}
@@ -299,13 +338,17 @@ func (f filterQuantYCCA) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 				a = 0xff
 			}
 			c := color.NYCbCrA{color.YCbCr{Y: uint8(yy), Cb: uint8(cb), Cr: uint8(cr)}, uint8(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
 }
 
+func (f filterQuantYCCA) String() string {
+	return fmt.Sprintf("qycc:[%d,%d,%d,%d]", f[0], f[1], f[2], f[3])
+}
+
 func newFilterQuantYCCA(opt *FilterOptions, rand Randn) Filter {
-	return filterQuantYCCA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
+	return filterQuantYCCA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
 }
 
 type filterInv struct{}
@@ -318,9 +361,13 @@ func (f filterInv) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp
 			g = a - g
 			b = a - b
 			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterInv) String() string {
+	return "inv"
 }
 
 func newFilterInv(opt *FilterOptions, rand Randn) Filter { return filterInv{} }
@@ -343,9 +390,13 @@ func (f filterInvRGBAComp) Apply(dst draw.Image, dr image.Rectangle, src image.I
 			g = (v[1] * a) / 0xffff
 			b = (v[2] * a) / 0xffff
 			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterInvRGBAComp) String() string {
+	return fmt.Sprintf("irgba:[%d]", f)
 }
 
 func newFilterInvRGBAComp(opt *FilterOptions, rand Randn) Filter {
@@ -369,9 +420,13 @@ func (f filterInvYCCComp) Apply(dst draw.Image, dr image.Rectangle, src image.Im
 				}
 			}
 			c := color.NYCbCrA{color.YCbCr{uint8(v[0]), uint8(v[1]), uint8(v[2])}, ycc.A}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterInvYCCComp) String() string {
+	return fmt.Sprintf("iycc:[%d]", f)
 }
 
 func newFilterInvYCCComp(opt *FilterOptions, rand Randn) Filter {
@@ -392,9 +447,13 @@ func (f filterGrayscale) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 			yy := (19595*r + 38470*g + 7471*b + 1<<15) >> 16
 			yy = (yy * a) / 0xffff
 			c := color.RGBA64{uint16(yy), uint16(yy), uint16(yy), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
 		}
 	}
+}
+
+func (f filterGrayscale) String() string {
+	return "gs"
 }
 
 func newFilterGrayscale(opt *FilterOptions, rand Randn) Filter { return filterGrayscale{} }
@@ -403,11 +462,17 @@ type filterBitRasp struct {
 	mode  uint8
 	op    uint8
 	bits  uint8
+	mask  uint8
 	alpha uint8
 }
 
 func (f filterBitRasp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	m := (uint32(1) << (f.bits + 8)) - 1
+	var m uint32
+	if f.bits != 0 {
+		m = (uint32(1) << f.bits) - 1
+	} else {
+		m = uint32(f.mask)
+	}
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
@@ -416,21 +481,23 @@ func (f filterBitRasp) Apply(dst draw.Image, dr image.Rectangle, src image.Image
 				g = (g * 0xffff) / a
 				b = (b * 0xffff) / a
 			}
+			dx, dy := dr.Min.X+x, dr.Min.Y+y
 			var mix uint32
 			switch f.mode {
 			case 0:
-				mix = ((uint32(dr.Min.X+x) << 8) & m)
+				mix = uint32(dx)
 			case 1:
-				mix = ((uint32(dr.Min.Y+y) << 8) & m)
+				mix = uint32(dy)
 			case 2:
-				mix = ((uint32(dr.Min.Y+y+dr.Min.X+x) << 8) & m)
+				mix = uint32(dy + dx)
 			case 3:
-				mix = (((uint32(dr.Min.Y+y) | uint32(dr.Min.X+x)) << 8) & m)
+				mix = uint32(dy) | uint32(dx)
 			case 4:
-				mix = (((uint32(dr.Min.Y+y) & uint32(dr.Min.X+x)) << 8) & m)
+				mix = uint32(dy) & uint32(dx)
 			default:
-				mix = (((uint32(dr.Min.Y+y) ^ uint32(dr.Min.X+x)) << 8) & m)
+				mix = uint32(dy) ^ uint32(dx)
 			}
+			mix = (mix & m) << 8
 			aa := a
 			switch f.op {
 			case 0:
@@ -461,21 +528,30 @@ func (f filterBitRasp) Apply(dst draw.Image, dr image.Rectangle, src image.Image
 			g = (g * a) / 0xffff
 			b = (b * a) / 0xffff
 			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			dst.Set(dx, dy, op.Apply(dst.At(dx, dy), c))
 		}
 	}
 }
 
+func (f filterBitRasp) String() string {
+	return fmt.Sprintf("rasp:{m:%d,op:%d,b:%d,mask:%d,a:%d}", f.mode, f.op, f.bits, f.mask, f.alpha)
+}
+
 func newFilterBitRasp(opt *FilterOptions, rand Randn) Filter {
-	return filterBitRasp{
-		bits:  uint8(2 + rand.Intn(7)),
+	ret := filterBitRasp{
 		mode:  uint8(rand.Intn(6)),
 		op:    uint8(rand.Intn(4)),
 		alpha: uint8(rand.Intn(2)),
 	}
+	if rand.Intn(2) == 1 {
+		ret.bits = uint8(2 + rand.Intn(7))
+	} else {
+		ret.mask = uint8(rand.Intn(256))
+	}
+	return ret
 }
 
-var filters = []filterConstructor{
+var filtersTable = []filterConstructor{
 	FilterColor:       newFilterColor,
 	FilterSource:      newFilterSource,
 	FilterSetRGBAComp: newFilterSetRGBAComp,
@@ -494,8 +570,8 @@ var filters = []filterConstructor{
 }
 
 func NewRandomizedFilter(f int, opt *FilterOptions, r Randn) Filter {
-	if f < len(filters) {
-		return filters[f](opt, r)
+	if f < len(filtersTable) {
+		return filtersTable[f](opt, r)
 	}
 	return nil
 }

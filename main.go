@@ -6,11 +6,11 @@ import (
 	"image"
 	_ "image/jpeg"
 	"image/png"
-	"log"
 	"os"
 	"path"
 
 	"github.com/e-asphyx/gltihc/engine"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -18,23 +18,32 @@ func main() {
 		opt    engine.Options
 		prefix string
 		copies int
+		debug  bool
 	)
 
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <input>\n\nOptions:\n", path.Base(os.Args[0]))
+		flag.PrintDefaults()
+	}
+
+	flag.BoolVar(&debug, "debug", false, "Debug")
 	flag.IntVar(&copies, "copies", 1, "Copies")
 	flag.StringVar(&prefix, "prefix", "", "Prefix")
 	flag.IntVar(&opt.Iterations, "iter", 1, "Iterations")
 	flag.IntVar(&opt.BlockSize, "bs", 16, "BlockSize")
 	flag.Float64Var(&opt.MinSegmentSize, "min-segment-size", 0.01, "Minimum segment size relative to image size")
 	flag.Float64Var(&opt.MaxSegmentSize, "max-segment-size", 0.2, "Maximun segment size relative to image size")
-	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <input>\n\nOptions:\n", path.Base(os.Args[0]))
-		flag.PrintDefaults()
-	}
+	flag.IntVar(&opt.MinFilters, "min-filters", 1, "Minimum filters number in a chain")
+	flag.IntVar(&opt.MaxFilters, "max-filters", 1, "Maximun filters number in a chain")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	if debug {
+		log.SetLevel(log.DebugLevel)
 	}
 
 	reader, err := os.Open(flag.Args()[0])
@@ -56,6 +65,8 @@ func main() {
 		ln++
 	}
 	for c := 0; c < copies; c++ {
+		log.Debugf("copy: %d", c)
+
 		res, err := engine.Apply(source, &opt)
 		if err != nil {
 			log.Fatal(err)

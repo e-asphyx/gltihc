@@ -15,9 +15,14 @@ const (
 	OpNumOps
 )
 
-type Operation func(dst, src color.Color) color.Color
+type Operation interface {
+	Apply(dst, src color.Color) color.Color
+	String() string
+}
 
-func opCompose(dst, src color.Color) color.Color {
+type opCompose struct{}
+
+func (o opCompose) Apply(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	r := sr + dr*(0xffff-sa)/0xffff
@@ -27,11 +32,17 @@ func opCompose(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-func opReplace(dst, src color.Color) color.Color {
-	return src
-}
+func (o opCompose) String() string { return "comp" }
 
-func opAdd(dst, src color.Color) color.Color {
+type opReplace struct{}
+
+func (o opReplace) Apply(dst, src color.Color) color.Color { return src }
+
+func (o opReplace) String() string { return "rep" }
+
+type opAdd struct{}
+
+func (o opAdd) Apply(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
@@ -65,7 +76,11 @@ func opAdd(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-func opAddRGBMod(dst, src color.Color) color.Color {
+func (o opAdd) String() string { return "add" }
+
+type opAddRGBMod struct{}
+
+func (o opAddRGBMod) Apply(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
@@ -93,12 +108,16 @@ func opAddRGBMod(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-func opAddYCCMod(dst, src color.Color) color.Color {
+func (o opAddRGBMod) String() string { return "addrgbm" }
+
+type opAddYCCMod struct{}
+
+func (o opAddYCCMod) Apply(dst, src color.Color) color.Color {
 	s := color.NYCbCrAModel.Convert(src).(color.NYCbCrA)
 	d := color.NYCbCrAModel.Convert(dst).(color.NYCbCrA)
 	s.Y = (s.Y + d.Y) & 0xff
-	s.Cb = (s.Cb + d.Cb) & 0xff
-	s.Cr = (s.Cr + d.Cr) & 0xff
+	s.Cb = uint8((int32(s.Cb) + int32(d.Cb) - 128) & 0xff)
+	s.Cr = uint8((int32(s.Cr) + int32(d.Cr) - 128) & 0xff)
 	// Compose
 	sr, sg, sb, sa := s.RGBA()
 	dr, dg, db, da := dst.RGBA()
@@ -109,7 +128,11 @@ func opAddYCCMod(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-func opMulRGB(dst, src color.Color) color.Color {
+func (o opAddYCCMod) String() string { return "addyccm" }
+
+type opMulRGB struct{}
+
+func (o opMulRGB) Apply(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
@@ -117,6 +140,8 @@ func opMulRGB(dst, src color.Color) color.Color {
 		sr = (((sr * 0xffff) / sa) * ((dr * 0xffff) / da)) / 0xffff
 		sg = (((sg * 0xffff) / sa) * ((dg * 0xffff) / da)) / 0xffff
 		sb = (((sb * 0xffff) / sa) * ((db * 0xffff) / da)) / 0xffff
+	} else {
+		sr, sg, sb = 0, 0, 0
 	}
 	// Premultiply
 	sr = (sr * a) / 0xffff
@@ -129,7 +154,11 @@ func opMulRGB(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-func opMulYCC(dst, src color.Color) color.Color {
+func (o opMulRGB) String() string { return "mulrgb" }
+
+type opMulYCC struct{}
+
+func (o opMulYCC) Apply(dst, src color.Color) color.Color {
 	s := color.NYCbCrAModel.Convert(src).(color.NYCbCrA)
 	d := color.NYCbCrAModel.Convert(dst).(color.NYCbCrA)
 	s.Y = uint8(uint32(s.Y) * uint32(d.Y) / 0xff)
@@ -145,7 +174,11 @@ func opMulYCC(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-func opXorRGB(dst, src color.Color) color.Color {
+func (o opMulYCC) String() string { return "mulycc" }
+
+type opXorRGB struct{}
+
+func (o opXorRGB) Apply(dst, src color.Color) color.Color {
 	sr, sg, sb, sa := src.RGBA()
 	dr, dg, db, da := dst.RGBA()
 	a := sa + da*(0xffff-sa)/0xffff
@@ -170,12 +203,16 @@ func opXorRGB(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-func opXorYCC(dst, src color.Color) color.Color {
+func (o opXorRGB) String() string { return "xorrgb" }
+
+type opXorYCC struct{}
+
+func (o opXorYCC) Apply(dst, src color.Color) color.Color {
 	s := color.NYCbCrAModel.Convert(src).(color.NYCbCrA)
 	d := color.NYCbCrAModel.Convert(dst).(color.NYCbCrA)
 	s.Y = s.Y ^ d.Y
-	s.Cb = uint8((int32(s.Cb) - 128) ^ (int32(d.Cb) - 128) + 128)
-	s.Cr = uint8((int32(s.Cr) - 128) ^ (int32(d.Cr) - 128) + 128)
+	s.Cb = uint8(((int32(s.Cb) - 128) ^ (int32(d.Cb) - 128)) + 128)
+	s.Cr = uint8(((int32(s.Cr) - 128) ^ (int32(d.Cr) - 128)) + 128)
 	// Compose
 	sr, sg, sb, sa := s.RGBA()
 	dr, dg, db, da := dst.RGBA()
@@ -186,21 +223,23 @@ func opXorYCC(dst, src color.Color) color.Color {
 	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
 }
 
-var ops = []Operation{
-	OpCompose:   opCompose,
-	OpReplace:   opReplace,
-	OpAdd:       opAdd,
-	OpAddRGBMod: opAddRGBMod,
-	OpAddYCCMod: opAddYCCMod,
-	OpMulRGB:    opMulRGB,
-	OpMulYCC:    opMulYCC,
-	OpXorRGB:    opXorRGB,
-	OpXorYCC:    opXorYCC,
+func (o opXorYCC) String() string { return "xorycc" }
+
+var opsTable = []Operation{
+	OpCompose:   opCompose{},
+	OpReplace:   opReplace{},
+	OpAdd:       opAdd{},
+	OpAddRGBMod: opAddRGBMod{},
+	OpAddYCCMod: opAddYCCMod{},
+	OpMulRGB:    opMulRGB{},
+	OpMulYCC:    opMulYCC{},
+	OpXorRGB:    opXorRGB{},
+	OpXorYCC:    opXorYCC{},
 }
 
 func GetOp(op int) Operation {
-	if op < len(ops) {
-		return ops[op]
+	if op < len(opsTable) {
+		return opsTable[op]
 	}
 	return nil
 }
