@@ -19,6 +19,8 @@ type Options struct {
 	MaxSegmentSize float64
 	MinFilters     int
 	MaxFilters     int
+	Filters        []string
+	Ops            []string
 }
 
 var (
@@ -32,6 +34,22 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 		opt.MinSegmentSize < 0 || opt.MaxSegmentSize < opt.MinSegmentSize ||
 		opt.MinFilters <= 0 || opt.MaxFilters < opt.MinFilters {
 		return nil, ErrOptions
+	}
+
+	if opt.Filters != nil {
+		for _, f := range opt.Filters {
+			if GetFilter(f) < 0 {
+				return nil, fmt.Errorf("unknown filter: %s", f)
+			}
+		}
+	}
+
+	if opt.Ops != nil {
+		for _, o := range opt.Ops {
+			if GetOpByName(o) == nil {
+				return nil, fmt.Errorf("unknown op: %s", o)
+			}
+		}
 	}
 
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -82,19 +100,29 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 			Reference: src,
 		}
 		for i := range filters {
-			n := rnd.Intn(FilterNumFilters)
-			filters[i] = NewRandomizedFilter(n, &fo, rnd)
+			var n int
+			if opt.Filters != nil {
+				n = rnd.Intn(len(opt.Filters))
+				n = GetFilter(opt.Filters[n])
+			} else {
+				n = rnd.Intn(FilterNumFilters)
+			}
+			if filters[i] = NewRandomizedFilter(n, &fo, rnd); filters[i] == nil {
+				return nil, ErrOptions
+			}
 		}
 
 		ops := make([]Operation, filtersNum)
 		for i := 0; i < filtersNum; i++ {
 			if i < filtersNum-1 {
 				ops[i] = GetOp(OpReplace)
+			} else if opt.Ops != nil {
+				opn := rnd.Intn(len(opt.Ops))
+				ops[i] = GetOpByName(opt.Ops[opn])
 			} else {
 				opn := rnd.Intn(OpNumOps)
 				ops[i] = GetOp(opn)
 			}
-
 		}
 
 		if log.IsLevelEnabled(log.DebugLevel) {

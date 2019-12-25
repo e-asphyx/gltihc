@@ -29,12 +29,16 @@ type Randn interface {
 
 const (
 	FilterColor = iota
+	FilterGray
 	FilterSource
 	FilterSetRGBAComp
+	FilterSetA
 	FilterSetYCCComp
 	FilterPermRGB
 	FilterPermRGBA
 	FilterPermYCC
+	FilterCopyComp
+	FilterCToA
 	FilterMix
 	FilterQuantRGBA
 	FilterQuantYCCA
@@ -80,6 +84,12 @@ func newFilterColor(opt *FilterOptions, rand Randn) Filter {
 	return filterColor(color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)})
 }
 
+func newFilterGray(opt *FilterOptions, rand Randn) Filter {
+	a := uint32(rand.Intn(256))
+	v := (uint32(rand.Intn(256)) * a) / 0xff
+	return filterColor(color.RGBA{uint8(v), uint8(v), uint8(v), uint8(a)})
+}
+
 type filterSetRGBAComp struct {
 	c, v uint8
 }
@@ -112,6 +122,10 @@ func (f filterSetRGBAComp) String() string {
 
 func newFilterSetRGBAComp(opt *FilterOptions, rand Randn) Filter {
 	return filterSetRGBAComp{uint8(rand.Intn(4)), uint8(rand.Intn(256))}
+}
+
+func newFilterSetA(opt *FilterOptions, rand Randn) Filter {
+	return filterSetRGBAComp{3, uint8(rand.Intn(256))}
 }
 
 type filterSource struct{}
@@ -193,6 +207,46 @@ func newFilterPermRGBA(opt *FilterOptions, rand Randn) Filter {
 func newFilterPermRGB(opt *FilterOptions, rand Randn) Filter {
 	p := rand.Perm(3)
 	return filterPermRGBA{p[0], p[1], p[2], 3}
+}
+
+type filterCopyComp struct {
+	d uint8
+	s uint8
+}
+
+func (f filterCopyComp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
+	for y := 0; y < dr.Dy(); y++ {
+		for x := 0; x < dr.Dx(); x++ {
+			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
+			if a != 0 {
+				r = (r * 0xffff) / a
+				g = (g * 0xffff) / a
+				b = (b * 0xffff) / a
+			}
+			v := [4]uint32{r, g, b, a}
+			v[f.d] = v[f.s]
+			a = v[3]
+			r = (v[0] * a) / 0xffff
+			g = (v[1] * a) / 0xffff
+			b = (v[2] * a) / 0xffff
+			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+		}
+	}
+}
+
+func (f filterCopyComp) String() string {
+	return fmt.Sprintf("cc:[%d:%d]", f.d, f.s)
+}
+
+func newFilterCopyComp(opt *FilterOptions, rand Randn) Filter {
+	p := rand.Perm(4)
+	return filterCopyComp{uint8(p[0]), uint8(p[1])}
+}
+
+func newFilterCToA(opt *FilterOptions, rand Randn) Filter {
+	p := rand.Intn(3)
+	return filterCopyComp{3, uint8(p)}
 }
 
 type filterPermYCC [3]int
@@ -553,12 +607,16 @@ func newFilterBitRasp(opt *FilterOptions, rand Randn) Filter {
 
 var filtersTable = []filterConstructor{
 	FilterColor:       newFilterColor,
+	FilterGray:        newFilterGray,
 	FilterSource:      newFilterSource,
 	FilterSetRGBAComp: newFilterSetRGBAComp,
+	FilterSetA:        newFilterSetA,
 	FilterSetYCCComp:  newFilterSetYCCComp,
 	FilterPermRGB:     newFilterPermRGB,
 	FilterPermRGBA:    newFilterPermRGBA,
 	FilterPermYCC:     newFilterPermYCC,
+	FilterCopyComp:    newFilterCopyComp,
+	FilterCToA:        newFilterCToA,
 	FilterMix:         newFilterMix,
 	FilterQuantRGBA:   newFilterQuantRGBA,
 	FilterQuantYCCA:   newFilterQuantYCCA,
@@ -574,4 +632,33 @@ func NewRandomizedFilter(f int, opt *FilterOptions, r Randn) Filter {
 		return filtersTable[f](opt, r)
 	}
 	return nil
+}
+
+var filterNames = map[string]int{
+	"color":   FilterColor,
+	"gray":    FilterGray,
+	"src":     FilterSource,
+	"rgba":    FilterSetRGBAComp,
+	"seta":    FilterSetA,
+	"ycc":     FilterSetYCCComp,
+	"prgb":    FilterPermRGB,
+	"prgba":   FilterPermRGBA,
+	"pycc":    FilterPermYCC,
+	"cop":     FilterCopyComp,
+	"ctoa":    FilterCToA,
+	"mix":     FilterMix,
+	"qrgba":   FilterQuantRGBA,
+	"qycc":    FilterQuantYCCA,
+	"inv":     FilterInv,
+	"invrgba": FilterInvRGBAComp,
+	"invycc":  FilterInvYCCComp,
+	"gs":      FilterGrayscale,
+	"rasp":    FilterBitRasp,
+}
+
+func GetFilter(name string) int {
+	if id, ok := filterNames[name]; ok {
+		return id
+	}
+	return -1
 }

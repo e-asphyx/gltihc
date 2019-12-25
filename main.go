@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
@@ -15,15 +16,18 @@ import (
 
 func main() {
 	var (
-		opt    engine.Options
-		prefix string
-		copies int
-		debug  bool
+		opt     engine.Options
+		prefix  string
+		copies  int
+		debug   bool
+		filters string
+		ops     string
 	)
 
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <input>\n\nOptions:\n", path.Base(os.Args[0]))
 		flag.PrintDefaults()
+		fmt.Fprintf(flag.CommandLine.Output(), "\nFilters:\n  color, gray, src, rgba, seta, ycc, prgb, prgba, pycc, cop, ctoa, mix, qrgba, qycc, inv, invrgba, invycc, gs, rasp\n\nOps:\n  cmp, src, add, addrgbm, addyccm, mulrgb, mulycc, xorrgb, xorycc\n")
 	}
 
 	flag.BoolVar(&debug, "debug", false, "Debug")
@@ -35,6 +39,8 @@ func main() {
 	flag.Float64Var(&opt.MaxSegmentSize, "max-segment-size", 0.2, "Maximun segment size relative to image size")
 	flag.IntVar(&opt.MinFilters, "min-filters", 1, "Minimum filters number in a chain")
 	flag.IntVar(&opt.MaxFilters, "max-filters", 1, "Maximun filters number in a chain")
+	flag.StringVar(&filters, "filters", "", "Allowed filters")
+	flag.StringVar(&ops, "ops", "", "Allowed ops")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -44,6 +50,14 @@ func main() {
 
 	if debug {
 		log.SetLevel(log.DebugLevel)
+	}
+
+	if filters != "" {
+		opt.Filters = strings.Split(filters, ",")
+	}
+
+	if ops != "" {
+		opt.Ops = strings.Split(ops, ",")
 	}
 
 	reader, err := os.Open(flag.Args()[0])

@@ -243,3 +243,19 @@ func GetOp(op int) Operation {
 	}
 	return nil
 }
+
+var opsNamesTable = map[string]Operation{
+	"cmp":     opCompose{},
+	"src":     opReplace{},
+	"add":     opAdd{},
+	"addrgbm": opAddRGBMod{},
+	"addyccm": opAddYCCMod{},
+	"mulrgb":  opMulRGB{},
+	"mulycc":  opMulYCC{},
+	"xorrgb":  opXorRGB{},
+	"xorycc":  opXorYCC{},
+}
+
+func GetOpByName(op string) Operation {
+	return opsNamesTable[op]
+}
