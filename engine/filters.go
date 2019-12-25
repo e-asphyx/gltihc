@@ -468,7 +468,7 @@ func (f filterBitRasp) Apply(dst draw.Image, dr image.Rectangle, src image.Image
 
 func newFilterBitRasp(opt *FilterOptions, rand Randn) Filter {
 	return filterBitRasp{
-		bits:  uint8(4 + rand.Intn(5)),
+		bits:  uint8(2 + rand.Intn(7)),
 		mode:  uint8(rand.Intn(6)),
 		op:    uint8(rand.Intn(4)),
 		alpha: uint8(rand.Intn(2)),
