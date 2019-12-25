@@ -27,7 +27,7 @@ func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <input>\n\nOptions:\n", path.Base(os.Args[0]))
 		flag.PrintDefaults()
-		fmt.Fprintf(flag.CommandLine.Output(), "\nFilters:\n  color, gray, src, rgba, seta, ycc, prgb, prgba, pycc, cop, ctoa, mix, qrgba, qycc, inv, invrgba, invycc, gs, rasp\n\nOps:\n  cmp, src, add, addrgbm, addyccm, mulrgb, mulycc, xorrgb, xorycc\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "\nFilters:\n  color, gray, src, rgba, seta, ycc, prgb, prgba, pycc, cop, ctoa, mix, quant, qrgba, qycc, inv, invrgba, invycc, gs, rasp\n\nOps:\n  cmp, src, add, addrgbm, addyccm, mulrgb, mulycc, xorrgb, xorycc\n")
 	}
 
 	flag.BoolVar(&debug, "debug", false, "Debug")

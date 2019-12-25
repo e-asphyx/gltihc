@@ -40,6 +40,7 @@ const (
 	FilterCopyComp
 	FilterCToA
 	FilterMix
+	FilterQuant
 	FilterQuantRGBA
 	FilterQuantYCCA
 	FilterInv
@@ -367,6 +368,11 @@ func newFilterQuantRGBA(opt *FilterOptions, rand Randn) Filter {
 	return filterQuantRGBA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
 }
 
+func newFilterQuant(opt *FilterOptions, rand Randn) Filter {
+	n := uint8(rand.Intn(8))
+	return filterQuantRGBA{n, n, n, uint8(rand.Intn(8))}
+}
+
 type filterQuantYCCA [4]uint8
 
 func (f filterQuantYCCA) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
@@ -618,6 +624,7 @@ var filtersTable = []filterConstructor{
 	FilterCopyComp:    newFilterCopyComp,
 	FilterCToA:        newFilterCToA,
 	FilterMix:         newFilterMix,
+	FilterQuant:       newFilterQuant,
 	FilterQuantRGBA:   newFilterQuantRGBA,
 	FilterQuantYCCA:   newFilterQuantYCCA,
 	FilterInv:         newFilterInv,
@@ -647,6 +654,7 @@ var filterNames = map[string]int{
 	"cop":     FilterCopyComp,
 	"ctoa":    FilterCToA,
 	"mix":     FilterMix,
+	"quant":   FilterQuant,
 	"qrgba":   FilterQuantRGBA,
 	"qycc":    FilterQuantYCCA,
 	"inv":     FilterInv,
