@@ -83,9 +83,11 @@ func (f filterSetRGBAComp) Apply(dst draw.Image, dr image.Rectangle, src image.I
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			r = (r * 0xffff) / a
-			g = (g * 0xffff) / a
-			b = (b * 0xffff) / a
+			if a != 0 {
+				r = (r * 0xffff) / a
+				g = (g * 0xffff) / a
+				b = (b * 0xffff) / a
+			}
 			v := [4]uint32{r, g, b, a}
 			v[f.c] = val
 			a = v[3]
@@ -145,9 +147,11 @@ func (f filterPermRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Imag
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			r = (r * 0xffff) / a
-			g = (g * 0xffff) / a
-			b = (b * 0xffff) / a
+			if a != 0 {
+				r = (r * 0xffff) / a
+				g = (g * 0xffff) / a
+				b = (b * 0xffff) / a
+			}
 			v := [4]uint32{r, g, b, a}
 			a = v[f[3]]
 			r = (v[f[0]] * a) / 0xffff
@@ -236,9 +240,11 @@ func (f filterQuantRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			r = (r * 0xffff) / a
-			g = (g * 0xffff) / a
-			b = (b * 0xffff) / a
+			if a != 0 {
+				r = (r * 0xffff) / a
+				g = (g * 0xffff) / a
+				b = (b * 0xffff) / a
+			}
 			r = (r + (m[0] >> 1)) &^ (m[0] - 1)
 			g = (g + (m[1] >> 1)) &^ (m[1] - 1)
 			b = (b + (m[2] >> 1)) &^ (m[2] - 1)
@@ -325,9 +331,11 @@ func (f filterInvRGBAComp) Apply(dst draw.Image, dr image.Rectangle, src image.I
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			r = (r * 0xffff) / a
-			g = (g * 0xffff) / a
-			b = (b * 0xffff) / a
+			if a != 0 {
+				r = (r * 0xffff) / a
+				g = (g * 0xffff) / a
+				b = (b * 0xffff) / a
+			}
 			v := [4]uint32{r, g, b, a}
 			v[f] = 0xffff - v[f]
 			a = v[3]
@@ -376,9 +384,11 @@ func (f filterGrayscale) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			r = (r * 0xffff) / a
-			g = (g * 0xffff) / a
-			b = (b * 0xffff) / a
+			if a != 0 {
+				r = (r * 0xffff) / a
+				g = (g * 0xffff) / a
+				b = (b * 0xffff) / a
+			}
 			yy := (19595*r + 38470*g + 7471*b + 1<<15) >> 16
 			yy = (yy * a) / 0xffff
 			c := color.RGBA64{uint16(yy), uint16(yy), uint16(yy), uint16(a)}
@@ -401,9 +411,11 @@ func (f filterBitRasp) Apply(dst draw.Image, dr image.Rectangle, src image.Image
 	for y := 0; y < dr.Dy(); y++ {
 		for x := 0; x < dr.Dx(); x++ {
 			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			r = (r * 0xffff) / a
-			g = (g * 0xffff) / a
-			b = (b * 0xffff) / a
+			if a != 0 {
+				r = (r * 0xffff) / a
+				g = (g * 0xffff) / a
+				b = (b * 0xffff) / a
+			}
 			var mix uint32
 			switch f.mode {
 			case 0:

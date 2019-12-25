@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"image"
 	"math/rand"
 	"time"
@@ -15,7 +16,12 @@ type Options struct {
 	MaxSegmentSize float64
 }
 
-func Apply(img image.Image, opt *Options) image.Image {
+var (
+	ErrOptions       = errors.New("invalid engine options")
+	ErrImageTooSmall = errors.New("image is too small")
+)
+
+func Apply(img image.Image, opt *Options) (image.Image, error) {
 	src := image.NewRGBA64(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
 	dst := image.NewRGBA64(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
 	draw.Draw(dst, dst.Bounds(), img, img.Bounds().Min, draw.Src)
@@ -40,6 +46,10 @@ func Apply(img image.Image, opt *Options) image.Image {
 		mins, maxs = maxs, mins
 	}
 
+	if opt.BlockSize <= 0 || opt.Iterations <= 0 {
+		return nil, ErrOptions
+	}
+
 	for itn := 0; itn < opt.Iterations; itn++ {
 		srcBounds := src.Bounds()
 		dstBounds := dst.Bounds()
@@ -49,6 +59,9 @@ func Apply(img image.Image, opt *Options) image.Image {
 		blocksX := srcBounds.Dx() / opt.BlockSize
 		blocksY := srcBounds.Dy() / opt.BlockSize
 		blocks := blocksX * blocksY
+		if blocks == 0 {
+			return nil, ErrImageTooSmall
+		}
 
 		p := mins + rnd.Float64()*(maxs-mins)
 		segBlocks := int(float64(blocks) * p)
@@ -89,5 +102,5 @@ func Apply(img image.Image, opt *Options) image.Image {
 	ret := image.NewRGBA(image.Rect(0, 0, dst.Bounds().Dx(), dst.Bounds().Dy()))
 	draw.Draw(ret, ret.Bounds(), dst, dst.Bounds().Min, draw.Src)
 
-	return ret
+	return ret, nil
 }

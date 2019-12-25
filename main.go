@@ -56,7 +56,10 @@ func main() {
 		ln++
 	}
 	for c := 0; c < copies; c++ {
-		res := engine.Apply(source, &opt)
+		res, err := engine.Apply(source, &opt)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		outname := fmt.Sprintf("%s%0*d.png", prefix, ln, c)
 		f, err := os.Create(outname)
