@@ -13,7 +13,8 @@ import (
 )
 
 type Options struct {
-	Iterations     int
+	MinIterations  int
+	MaxIterations  int
 	BlockSize      int
 	MinSegmentSize float64
 	MaxSegmentSize float64
@@ -29,10 +30,11 @@ var (
 )
 
 func (opt *Options) Apply(img image.Image) (image.Image, error) {
-	if opt.BlockSize <= 0 || opt.Iterations <= 0 ||
+	if opt.BlockSize <= 0 ||
 		opt.MinSegmentSize > 1 || opt.MaxSegmentSize > 1 ||
 		opt.MinSegmentSize < 0 || opt.MaxSegmentSize < opt.MinSegmentSize ||
-		opt.MinFilters <= 0 || opt.MaxFilters < opt.MinFilters {
+		opt.MinFilters <= 0 || opt.MaxFilters < opt.MinFilters ||
+		opt.MinIterations <= 0 || opt.MaxIterations < opt.MinIterations {
 		return nil, ErrOptions
 	}
 
@@ -63,7 +65,8 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 	tmp1 := image.NewNRGBA64(image.Rect(0, 0, imageW, imageH))
 	draw.Draw(dst, dst.Bounds(), img, img.Bounds().Min, draw.Src)
 
-	for itn := 0; itn < opt.Iterations; itn++ {
+	iterations := opt.MinIterations + rnd.Intn(opt.MaxIterations-opt.MinIterations+1)
+	for itn := 0; itn < iterations; itn++ {
 		// Copy back
 		draw.Draw(src, src.Bounds(), dst, dst.Bounds().Min, draw.Src)
 
