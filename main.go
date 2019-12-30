@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -84,10 +85,11 @@ func main() {
 		filters string
 		ops     string
 		preset  string
+		dir     string
 	)
 
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <input>\n\nOptions:\n", path.Base(os.Args[0]))
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <input...>\n\nOptions:\n", path.Base(os.Args[0]))
 		flag.PrintDefaults()
 
 		p := make([]string, 0, len(presets))
@@ -115,6 +117,7 @@ func main() {
 	flag.StringVar(&filters, "filters", "", "Allowed filters")
 	flag.StringVar(&ops, "ops", "", "Allowed ops")
 	flag.StringVar(&preset, "preset", "", "Preset")
+	flag.StringVar(&dir, "dir", "", "Output directory")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -142,45 +145,68 @@ func main() {
 		}
 	}
 
-	reader, err := os.Open(flag.Args()[0])
-	if err != nil {
-		log.Fatal(err)
+	if dir != "" {
+		if err := os.MkdirAll(dir, 0777); err != nil {
+			log.Fatal(err)
+		}
 	}
 
-	source, _, err := image.Decode(reader)
-	if err != nil {
-		log.Fatal(err)
-	}
+	for _, infile := range flag.Args() {
+		pfx := prefix
+		if pfx == "" {
+			b := path.Base(infile)
+			if i := strings.IndexByte(b, '.'); i > 0 {
+				pfx = b[:i] + "_"
+			}
+		}
 
-	if err := reader.Close(); err != nil {
-		log.Fatal(err)
-	}
+		log.Printf("processing: %s", infile)
 
-	var ln int
-	for c := copies - 1; c > 0; c = c / 10 {
-		ln++
-	}
-	for c := 0; c < copies; c++ {
-		log.Debugf("copy: %d", c)
-
-		res, err := opt.Apply(source)
+		reader, err := os.Open(infile)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		outname := fmt.Sprintf("%s%0*d.png", prefix, ln, c)
-		f, err := os.Create(outname)
+		source, _, err := image.Decode(reader)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		if err := png.Encode(f, res); err != nil {
-			f.Close()
+		if err := reader.Close(); err != nil {
 			log.Fatal(err)
 		}
 
-		if err := f.Close(); err != nil {
-			log.Fatal(err)
+		var ln int
+		for c := copies - 1; c > 0; c = c / 10 {
+			ln++
+		}
+		for c := 0; c < copies; c++ {
+			log.Debugf("copy: %d", c)
+
+			res, err := opt.Apply(source)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			outname := fmt.Sprintf("%s%0*d.png", pfx, ln, c)
+			if dir != "" {
+				outname = filepath.Join(dir, outname)
+			}
+
+			log.Printf("writing: %s", outname)
+			f, err := os.Create(outname)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			if err := png.Encode(f, res); err != nil {
+				f.Close()
+				log.Fatal(err)
+			}
+
+			if err := f.Close(); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 }
