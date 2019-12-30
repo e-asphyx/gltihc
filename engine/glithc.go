@@ -28,7 +28,7 @@ var (
 	ErrImageTooSmall = errors.New("image is too small")
 )
 
-func Apply(img image.Image, opt *Options) (image.Image, error) {
+func (opt *Options) Apply(img image.Image) (image.Image, error) {
 	if opt.BlockSize <= 0 || opt.Iterations <= 0 ||
 		opt.MinSegmentSize > 1 || opt.MaxSegmentSize > 1 ||
 		opt.MinSegmentSize < 0 || opt.MaxSegmentSize < opt.MinSegmentSize ||
@@ -38,7 +38,7 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 
 	if opt.Filters != nil {
 		for _, f := range opt.Filters {
-			if GetFilter(f) < 0 {
+			if GetFilterID(f) < 0 {
 				return nil, fmt.Errorf("unknown filter: %s", f)
 			}
 		}
@@ -46,7 +46,7 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 
 	if opt.Ops != nil {
 		for _, o := range opt.Ops {
-			if GetOpByName(o) == nil {
+			if GetOpID(o) == nil {
 				return nil, fmt.Errorf("unknown op: %s", o)
 			}
 		}
@@ -57,10 +57,10 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 	imageW := img.Bounds().Dx()
 	imageH := img.Bounds().Dy()
 
-	src := image.NewRGBA64(image.Rect(0, 0, imageW, imageH))
-	dst := image.NewRGBA64(image.Rect(0, 0, imageW, imageH))
-	tmp0 := image.NewRGBA64(image.Rect(0, 0, imageW, imageH))
-	tmp1 := image.NewRGBA64(image.Rect(0, 0, imageW, imageH))
+	src := image.NewNRGBA64(image.Rect(0, 0, imageW, imageH))
+	dst := image.NewNRGBA64(image.Rect(0, 0, imageW, imageH))
+	tmp0 := image.NewNRGBA64(image.Rect(0, 0, imageW, imageH))
+	tmp1 := image.NewNRGBA64(image.Rect(0, 0, imageW, imageH))
 	draw.Draw(dst, dst.Bounds(), img, img.Bounds().Min, draw.Src)
 
 	for itn := 0; itn < opt.Iterations; itn++ {
@@ -103,7 +103,7 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 			var n int
 			if opt.Filters != nil {
 				n = rnd.Intn(len(opt.Filters))
-				n = GetFilter(opt.Filters[n])
+				n = GetFilterID(opt.Filters[n])
 			} else {
 				n = rnd.Intn(FilterNumFilters)
 			}
@@ -118,7 +118,7 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 				ops[i] = GetOp(OpReplace)
 			} else if opt.Ops != nil {
 				opn := rnd.Intn(len(opt.Ops))
-				ops[i] = GetOpByName(opt.Ops[opn])
+				ops[i] = GetOpID(opt.Ops[opn])
 			} else {
 				opn := rnd.Intn(OpNumOps)
 				ops[i] = GetOp(opn)
@@ -165,7 +165,7 @@ func Apply(img image.Image, opt *Options) (image.Image, error) {
 		}
 	}
 
-	ret := image.NewRGBA(image.Rect(0, 0, dst.Bounds().Dx(), dst.Bounds().Dy()))
+	ret := image.NewNRGBA(image.Rect(0, 0, dst.Bounds().Dx(), dst.Bounds().Dy()))
 	draw.Draw(ret, ret.Bounds(), dst, dst.Bounds().Min, draw.Src)
 
 	return ret, nil

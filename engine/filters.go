@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"sort"
 
 	"golang.org/x/image/draw"
 )
@@ -43,6 +44,7 @@ const (
 	FilterQuant
 	FilterQuantRGBA
 	FilterQuantYCCA
+	FilterQuantY
 	FilterInv
 	FilterInvRGBAComp
 	FilterInvYCCComp
@@ -411,6 +413,10 @@ func newFilterQuantYCCA(opt *FilterOptions, rand Randn) Filter {
 	return filterQuantYCCA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
 }
 
+func newFilterQuantY(opt *FilterOptions, rand Randn) Filter {
+	return filterQuantYCCA{uint8(rand.Intn(8)), 0, 0, 0}
+}
+
 type filterInv struct{}
 
 func (f filterInv) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
@@ -627,6 +633,7 @@ var filtersTable = []filterConstructor{
 	FilterQuant:       newFilterQuant,
 	FilterQuantRGBA:   newFilterQuantRGBA,
 	FilterQuantYCCA:   newFilterQuantYCCA,
+	FilterQuantY:      newFilterQuantY,
 	FilterInv:         newFilterInv,
 	FilterInvRGBAComp: newFilterInvRGBAComp,
 	FilterInvYCCComp:  newFilterInvYCCComp,
@@ -651,12 +658,13 @@ var filterNames = map[string]int{
 	"prgb":    FilterPermRGB,
 	"prgba":   FilterPermRGBA,
 	"pycc":    FilterPermYCC,
-	"cop":     FilterCopyComp,
+	"copy":    FilterCopyComp,
 	"ctoa":    FilterCToA,
 	"mix":     FilterMix,
 	"quant":   FilterQuant,
 	"qrgba":   FilterQuantRGBA,
-	"qycc":    FilterQuantYCCA,
+	"qycca":   FilterQuantYCCA,
+	"qy":      FilterQuantY,
 	"inv":     FilterInv,
 	"invrgba": FilterInvRGBAComp,
 	"invycc":  FilterInvYCCComp,
@@ -664,9 +672,18 @@ var filterNames = map[string]int{
 	"rasp":    FilterBitRasp,
 }
 
-func GetFilter(name string) int {
+func GetFilterID(name string) int {
 	if id, ok := filterNames[name]; ok {
 		return id
 	}
 	return -1
+}
+
+func FilterNames() []string {
+	ret := make([]string, 0, len(filterNames))
+	for name := range filterNames {
+		ret = append(ret, name)
+	}
+	sort.Strings(ret)
+	return ret
 }

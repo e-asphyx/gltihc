@@ -1,6 +1,9 @@
 package engine
 
-import "image/color"
+import (
+	"image/color"
+	"sort"
+)
 
 const (
 	OpCompose = iota
@@ -256,6 +259,15 @@ var opsNamesTable = map[string]Operation{
 	"xorycc":  opXorYCC{},
 }
 
-func GetOpByName(op string) Operation {
+func GetOpID(op string) Operation {
 	return opsNamesTable[op]
+}
+
+func OpNames() []string {
+	ret := make([]string, 0, len(opsNamesTable))
+	for name := range opsNamesTable {
+		ret = append(ret, name)
+	}
+	sort.Strings(ret)
+	return ret
 }

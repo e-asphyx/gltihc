@@ -8,11 +8,72 @@ import (
 	"image/png"
 	"os"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
 )
+
+type preset struct {
+	filters []string
+	ops     []string
+}
+
+var presets = map[string]preset{
+	"tame": {
+		filters: []string{
+			"color",
+			"gray",
+			"src",
+			"rgba",
+			"seta",
+			"ycc",
+			"prgb",
+			"prgba",
+			"pycc",
+			"copy",
+			"ctoa",
+			"mix",
+			"quant",
+			"qrgba",
+			"qycca",
+			"qy",
+			"inv",
+			"gs",
+			"rasp",
+		},
+		ops: []string{
+			"cmp",
+			"src",
+			"add",
+			"mulrgb",
+			"mulycc",
+		},
+	},
+	"nocolorshift": {
+		filters: []string{
+			"gray",
+			"src",
+			"seta",
+			"ctoa",
+			"quant",
+			"qy",
+			"inv",
+			"gs",
+			"rasp",
+		},
+		ops: []string{
+			"cmp",
+			"src",
+			"add",
+			"mulrgb",
+			"mulycc",
+			"xorrgb",
+			"xorycc",
+		},
+	},
+}
 
 func main() {
 	var (
@@ -22,12 +83,24 @@ func main() {
 		debug   bool
 		filters string
 		ops     string
+		preset  string
 	)
 
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] <input>\n\nOptions:\n", path.Base(os.Args[0]))
 		flag.PrintDefaults()
-		fmt.Fprintf(flag.CommandLine.Output(), "\nFilters:\n  color, gray, src, rgba, seta, ycc, prgb, prgba, pycc, cop, ctoa, mix, quant, qrgba, qycc, inv, invrgba, invycc, gs, rasp\n\nOps:\n  cmp, src, add, addrgbm, addyccm, mulrgb, mulycc, xorrgb, xorycc\n")
+
+		p := make([]string, 0, len(presets))
+		for name := range presets {
+			p = append(p, name)
+		}
+		sort.Strings(p)
+
+		fmt.Fprintf(flag.CommandLine.Output(),
+			"\nFilters:\n  %s\n\nOperations:\n  %s\n\nPresets:\n  %s\n",
+			strings.Join(engine.FilterNames(), ", "),
+			strings.Join(engine.OpNames(), ", "),
+			strings.Join(p, ", "))
 	}
 
 	flag.BoolVar(&debug, "debug", false, "Debug")
@@ -41,6 +114,7 @@ func main() {
 	flag.IntVar(&opt.MaxFilters, "max-filters", 1, "Maximun filters number in a chain")
 	flag.StringVar(&filters, "filters", "", "Allowed filters")
 	flag.StringVar(&ops, "ops", "", "Allowed ops")
+	flag.StringVar(&preset, "preset", "", "Preset")
 	flag.Parse()
 
 	if len(flag.Args()) == 0 {
@@ -52,12 +126,20 @@ func main() {
 		log.SetLevel(log.DebugLevel)
 	}
 
-	if filters != "" {
-		opt.Filters = strings.Split(filters, ",")
-	}
-
-	if ops != "" {
-		opt.Ops = strings.Split(ops, ",")
+	if preset != "" {
+		p, ok := presets[preset]
+		if !ok {
+			log.Fatalf("Unknown preset `%s'", preset)
+		}
+		opt.Filters = p.filters
+		opt.Ops = p.ops
+	} else {
+		if filters != "" {
+			opt.Filters = strings.Split(filters, ",")
+		}
+		if ops != "" {
+			opt.Ops = strings.Split(ops, ",")
+		}
 	}
 
 	reader, err := os.Open(flag.Args()[0])
@@ -81,7 +163,7 @@ func main() {
 	for c := 0; c < copies; c++ {
 		log.Debugf("copy: %d", c)
 
-		res, err := engine.Apply(source, &opt)
+		res, err := opt.Apply(source)
 		if err != nil {
 			log.Fatal(err)
 		}
