@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"image"
 	"math/rand"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -83,6 +85,9 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 
 		p := opt.MinSegmentSize + rnd.Float64()*(opt.MaxSegmentSize-opt.MinSegmentSize)
 		segBlocks := int(float64(blocks) * p)
+		if segBlocks == 0 {
+			continue
+		}
 		segStart := rnd.Intn(blocks - segBlocks + 1)
 
 		var segShift int
@@ -90,6 +95,9 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 			// Apply shift
 			segShift = rnd.Intn(blocks)
 		}
+
+		cpus := runtime.NumCPU()
+		blocksPerThread := (segBlocks + cpus - 1) / cpus
 
 		// Clear intermediate images
 		draw.Draw(tmp0, tmp0.Bounds(), image.Transparent, tmp0.Bounds().Min, draw.Src)
@@ -151,19 +159,32 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 				dd = dst
 			}
 
-			// Apply block by block
-			for b := segStart; b < segStart+segBlocks; b++ {
-				sb := b
-				if fc == 0 {
-					// Apply shift
-					sb = (b + segShift) % blocks
+			var wg sync.WaitGroup
+			delta := blocksPerThread
+			for tlen, tstart := segBlocks, segStart; tlen > 0; tlen, tstart = tlen-delta, tstart+delta {
+				if delta > tlen {
+					delta = tlen
 				}
+				wg.Add(1)
+				go func(b, ln int) {
+					// Apply block by block
+					for ; ln > 0; b, ln = b+1, ln-1 {
+						sb := b
+						if fc == 0 {
+							// Apply shift
+							sb = (b + segShift) % blocks
+						}
 
-				dx, dy := (b%blocksX)*opt.BlockSize, (b/blocksX)*opt.BlockSize
-				dr := image.Rect(dx, dy, dx+opt.BlockSize, dy+opt.BlockSize)
-				sp := image.Point{(sb % blocksX) * opt.BlockSize, (sb / blocksX) * opt.BlockSize}
-				filters[fc].Apply(dd, dr, ss, sp, ops[fc])
+						dx, dy := (b%blocksX)*opt.BlockSize, (b/blocksX)*opt.BlockSize
+						dr := image.Rect(dx, dy, dx+opt.BlockSize, dy+opt.BlockSize)
+						sp := image.Point{(sb % blocksX) * opt.BlockSize, (sb / blocksX) * opt.BlockSize}
+						filters[fc].Apply(dd, dr, ss, sp, ops[fc])
+					}
+					wg.Done()
+				}(tstart, delta)
 			}
+			wg.Wait()
+
 			tmp0, tmp1 = tmp1, tmp0
 		}
 	}
