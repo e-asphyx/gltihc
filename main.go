@@ -14,6 +14,7 @@ import (
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
+	_ "golang.org/x/image/tiff"
 )
 
 type preset struct {
