@@ -34,7 +34,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 		opt.MinSegmentSize > 1 || opt.MaxSegmentSize > 1 ||
 		opt.MinSegmentSize < 0 || opt.MaxSegmentSize < opt.MinSegmentSize ||
 		opt.MinFilters <= 0 || opt.MaxFilters < opt.MinFilters ||
-		opt.MinIterations <= 0 || opt.MaxIterations < opt.MinIterations {
+		opt.MinIterations < 0 || opt.MaxIterations < opt.MinIterations {
 		return nil, ErrOptions
 	}
 
