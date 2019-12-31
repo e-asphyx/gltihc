@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
@@ -77,10 +78,30 @@ var presets = map[string]preset{
 	},
 }
 
+var funcMap = template.FuncMap{
+	"base": filepath.Base,
+	"basename": func(n string) string {
+		n = filepath.Base(n)
+		if i := strings.LastIndexByte(n, '.'); i >= 0 {
+			return n[:i]
+		}
+		return n
+	},
+	"ext": filepath.Ext,
+}
+
+type tplContext struct {
+	Input       string
+	InputCount  int
+	NumInputs   int
+	CopiesCount int
+	NumCopies   int
+}
+
 func main() {
 	var (
 		opt     engine.Options
-		prefix  string
+		format  string
 		copies  int
 		debug   bool
 		filters string
@@ -115,7 +136,7 @@ func main() {
 	flag.IntVar(&opt.MaxFilters, "max-filters", 1, "Maximun filters number in a chain")
 	flag.BoolVar(&debug, "debug", false, "Debug")
 	flag.IntVar(&copies, "copies", 1, "Copies")
-	flag.StringVar(&prefix, "prefix", "", "Prefix")
+	flag.StringVar(&format, "fmt", "{{.Input | basename}}_{{printf \"%08d\" .Count}}.png", "Output file name format")
 	flag.StringVar(&filters, "filters", "", "Allowed filters")
 	flag.StringVar(&ops, "ops", "", "Allowed ops")
 	flag.StringVar(&preset, "preset", "", "Preset")
@@ -147,21 +168,19 @@ func main() {
 		}
 	}
 
+	outTpl, err := template.New("output").Funcs(funcMap).Parse(format)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if dir != "" {
 		if err := os.MkdirAll(dir, 0777); err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	for _, infile := range flag.Args() {
-		pfx := prefix
-		if pfx == "" {
-			b := path.Base(infile)
-			if i := strings.IndexByte(b, '.'); i > 0 {
-				pfx = b[:i] + "_"
-			}
-		}
-
+	inputs := flag.Args()
+	for cnt, infile := range inputs {
 		log.Printf("processing: %s", infile)
 
 		reader, err := os.Open(infile)
@@ -185,18 +204,30 @@ func main() {
 		for c := 0; c < copies; c++ {
 			log.Debugf("copy: %d", c)
 
+			var outName strings.Builder
+			err := outTpl.Execute(&outName, &tplContext{
+				Input:       infile,
+				InputCount:  cnt,
+				NumInputs:   len(inputs),
+				CopiesCount: c,
+				NumCopies:   copies,
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
+
 			res, err := opt.Apply(source)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			outname := fmt.Sprintf("%s%0*d.png", pfx, ln, c)
+			name := outName.String()
 			if dir != "" {
-				outname = filepath.Join(dir, outname)
+				name = filepath.Join(dir, name)
 			}
 
-			log.Printf("writing: %s", outname)
-			f, err := os.Create(outname)
+			log.Printf("writing: %s", name)
+			f, err := os.Create(name)
 			if err != nil {
 				log.Fatal(err)
 			}
