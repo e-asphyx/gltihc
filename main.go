@@ -100,14 +100,14 @@ type tplContext struct {
 
 func main() {
 	var (
-		opt     engine.Options
-		format  string
-		copies  int
-		debug   bool
-		filters string
-		ops     string
-		preset  string
-		dir     string
+		opt      engine.Options
+		format   string
+		copies   int
+		logLevel string
+		filters  string
+		ops      string
+		preset   string
+		dir      string
 	)
 
 	flag.Usage = func() {
@@ -134,9 +134,10 @@ func main() {
 	flag.Float64Var(&opt.MaxSegmentSize, "max-segment-size", 0.2, "Maximun segment size relative to image size")
 	flag.IntVar(&opt.MinFilters, "min-filters", 1, "Minimum filters number in a chain")
 	flag.IntVar(&opt.MaxFilters, "max-filters", 1, "Maximun filters number in a chain")
-	flag.BoolVar(&debug, "debug", false, "Debug")
+	flag.IntVar(&opt.Threads, "threads", 0, "Number of threads")
+	flag.StringVar(&logLevel, "log", "info", "Log level")
 	flag.IntVar(&copies, "copies", 1, "Copies")
-	flag.StringVar(&format, "fmt", "{{.Input | basename}}_{{printf \"%08d\" .Count}}.png", "Output file name format")
+	flag.StringVar(&format, "fmt", "{{.Input | basename}}_{{printf \"%08d\" .CopiesCount}}.png", "Output file name format")
 	flag.StringVar(&filters, "filters", "", "Allowed filters")
 	flag.StringVar(&ops, "ops", "", "Allowed ops")
 	flag.StringVar(&preset, "preset", "", "Preset")
@@ -148,8 +149,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	if debug {
-		log.SetLevel(log.DebugLevel)
+	if lv, err := log.ParseLevel(logLevel); err != nil {
+		log.Fatal(err)
+	} else {
+		log.SetLevel(lv)
 	}
 
 	if preset != "" {

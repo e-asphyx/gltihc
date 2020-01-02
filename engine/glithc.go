@@ -24,6 +24,7 @@ type Options struct {
 	MaxFilters     int
 	Filters        []string
 	Ops            []string
+	Threads        int
 }
 
 var (
@@ -55,6 +56,12 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 			}
 		}
 	}
+
+	threadsNum := opt.Threads
+	if threadsNum <= 0 {
+		threadsNum = runtime.NumCPU()
+	}
+	log.Tracef("threadsNum: %d", threadsNum)
 
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -96,8 +103,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 			segShift = rnd.Intn(blocks)
 		}
 
-		cpus := runtime.NumCPU()
-		blocksPerThread := (segBlocks + cpus - 1) / cpus
+		blocksPerThread := (segBlocks + threadsNum - 1) / threadsNum
 
 		// Clear intermediate images
 		draw.Draw(tmp0, tmp0.Bounds(), image.Transparent, tmp0.Bounds().Min, draw.Src)
@@ -167,6 +173,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 				}
 				wg.Add(1)
 				go func(b, ln int) {
+					log.Tracef("block: %d..%d, filter: %v", b, b+ln, filters[fc])
 					// Apply block by block
 					for ; ln > 0; b, ln = b+1, ln-1 {
 						sb := b
