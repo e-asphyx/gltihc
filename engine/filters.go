@@ -557,8 +557,10 @@ func (f filterBitRasp) Apply(dst draw.Image, dr image.Rectangle, src image.Image
 			case 2:
 				mix = uint32(dy + dx)
 			case 3:
-				mix = uint32(dy) | uint32(dx)
+				mix = uint32(dy - dx)
 			case 4:
+				mix = uint32(dy) | uint32(dx)
+			case 5:
 				mix = uint32(dy) & uint32(dx)
 			default:
 				mix = uint32(dy) ^ uint32(dx)
@@ -605,7 +607,7 @@ func (f filterBitRasp) String() string {
 
 func newFilterBitRasp(opt *FilterOptions, rand Randn) Filter {
 	ret := filterBitRasp{
-		mode:  uint8(rand.Intn(6)),
+		mode:  uint8(rand.Intn(7)),
 		op:    uint8(rand.Intn(4)),
 		alpha: uint8(rand.Intn(2)),
 	}
