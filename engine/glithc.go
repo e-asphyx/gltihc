@@ -172,7 +172,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 					delta = tlen
 				}
 				wg.Add(1)
-				go func(b, ln int) {
+				worker := func(b, ln int) {
 					log.Tracef("block: %d..%d, filter: %v", b, b+ln, filters[fc])
 					// Apply block by block
 					for ; ln > 0; b, ln = b+1, ln-1 {
@@ -188,7 +188,12 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 						filters[fc].Apply(dd, dr, ss, sp, ops[fc])
 					}
 					wg.Done()
-				}(tstart, delta)
+				}
+				if blocksPerThread == segBlocks {
+					worker(tstart, delta)
+				} else {
+					go worker(tstart, delta)
+				}
 			}
 			wg.Wait()
 

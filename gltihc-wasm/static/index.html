@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Gltihc</title>
+    <link rel="stylesheet" href="mini-dark.min.css" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+</head>
+
+<body>
+    <input type="file" id="uploader" accept="image/*" style="display: none;" />
+    <div class="app">
+        <header class="flex-shrink-0">
+            <a href="#" class="logo">Gltihc</a>
+            <a href="https://github.com/e-asphyx/gltihc" class="button" target="_blank">GitHub&nbsp;<i
+                    class="material-icons">open_in_new</i></a>
+        </header>
+        <div class="image-container">
+            <img id="targetImg" alt="Processed image" style="display: none;" />
+            <div id="msgContainer" class="msg-container">
+                <span id="msgToast" class="msg-toast">No image loaded</span>
+            </div>
+        </div>
+        <div class="button-group flex-shrink-0">
+            <a href="#" class="button col-sm" id="uploadBtn"><i class="material-icons">add_a_photo</i></a>
+            <a href="#" class="button col-sm" id="refreshBtn"><i class="material-icons">refresh</i></a>
+            <a href="#" class="button col-sm" id="settingsBtn"><i class="material-icons">settings_applications</i></a>
+        </div>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+
+</html>

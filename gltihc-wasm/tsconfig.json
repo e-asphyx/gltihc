@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist",
+    "moduleResolution": "node",
+    "target": "es2018",
+    "module": "es2015",
+    "strict": true,
+    "alwaysStrict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noImplicitUseStrict": false,
+    "noUnusedLocals": true,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "removeComments": false,
+    "jsx": "react",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "importHelpers": true,
+    "noEmitHelpers": true,
+    "inlineSourceMap": false,
+    "sourceMap": true,
+    "emitDecoratorMetadata": false,
+    "experimentalDecorators": true,
+    "downlevelIteration": true,
+    "pretty": true,
+    "allowJs": true
+  },
+  "include": [
+    "./src/**/*"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "gltihc-wasm",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "make"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^3.7.4"
+  },
+  "dependencies": {
+    "mini.css": "^3.0.1"
+  }
+}
