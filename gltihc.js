@@ -1,4 +1,5 @@
 import "./wasm_exec/wasm_exec.js";
+;
 const assemblyPath = "./gltihc.wasm";
 export class Gltihc {
     constructor() {
@@ -12,6 +13,8 @@ export class Gltihc {
             minIterations: 10,
             minSegmentSize: 0.01,
             ops: null,
+            maxHeight: 1024,
+            maxWidth: 1024,
         };
         this.initDone = new Promise((resolve) => {
             window._gltihcInitDone = () => {
