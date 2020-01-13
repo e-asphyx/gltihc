@@ -1,0 +1,90 @@
+html, body {
+    height: 100%;
+}
+
+body {
+    overflow: scroll;
+}
+
+.image-container {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    position: relative;
+}
+
+.image-container img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.material-icons {
+    vertical-align: middle;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.flex-grow-1 {
+    flex-grow: 1;
+}
+
+.flex-shrink-1 {
+    flex-shrink: 1;
+}
+
+.flex-shrink-0 {
+    flex-shrink: 0;
+}
+
+.msg-container {
+    display: flex;
+    position: absolute;
+    align-items: center;
+    justify-content: center;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+}
+
+.msg-toast {
+    opacity: 80%;
+    color: var(--toast-fore-color);
+    background: var(--toast-back-color);
+    border-radius: calc(var(--universal-border-radius) * 16);
+    padding: var(--universal-padding) calc(var(--universal-padding) * 3);
+}
+
+.responsive-label {
+    align-items: center;
+}
+
+[type="checkbox"].modal + div .card {
+    max-height: initial;
+    max-width: initial;
+    justify-content: flex-start;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+[type="checkbox"].modal + div form .row [type="text"],
+[type="checkbox"].modal + div form .row [type="number"] {
+    width: 100%;
+}
+
+.button-group {
+    flex-direction: row !important;
+}
+
+.button-group > :not(:first-child) {
+    border: 0 !important;
+    border-left: 0.0625rem solid var(--button-group-border-color) !important;
+}
