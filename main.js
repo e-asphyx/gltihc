@@ -2,12 +2,12 @@ import { Gltihc } from "./gltihc.js";
 const optionControls = [
     {
         label: "Maximum width",
-        min: 1,
+        min: 0,
         prop: "maxWidth",
     },
     {
         label: "Maximum height",
-        min: 1,
+        min: 0,
         prop: "maxHeight",
     },
     {
