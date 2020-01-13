@@ -62,3 +62,29 @@ body {
     border-radius: calc(var(--universal-border-radius) * 16);
     padding: var(--universal-padding) calc(var(--universal-padding) * 3);
 }
+
+.responsive-label {
+    align-items: center;
+}
+
+[type="checkbox"].modal + div .card {
+    max-height: initial;
+    max-width: initial;
+    justify-content: flex-start;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+[type="checkbox"].modal + div form .row [type="text"],
+[type="checkbox"].modal + div form .row [type="number"] {
+    width: 100%;
+}
+
+.button-group {
+    flex-direction: row !important;
+}
+
+.button-group > :not(:first-child) {
+    border: 0 !important;
+    border-left: 0.0625rem solid var(--button-group-border-color) !important;
+}

@@ -4,13 +4,12 @@ package main
 import (
 	"bytes"
 	"image"
-	_ "image/jpeg"
-	"image/png"
+	"image/jpeg"
+	_ "image/png"
 	"syscall/js"
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
-	_ "golang.org/x/image/tiff"
 )
 
 func processImageFunc(this js.Value, args []js.Value) interface{} {
@@ -63,7 +62,7 @@ func processImageFunc(this js.Value, args []js.Value) interface{} {
 	}
 
 	var outBuf bytes.Buffer
-	if err := png.Encode(&outBuf, resImg); err != nil {
+	if err := jpeg.Encode(&outBuf, resImg, &jpeg.Options{Quality: 95}); err != nil {
 		log.Error(err)
 		return err.Error()
 	}
