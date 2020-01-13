@@ -4,29 +4,11 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math/rand"
 	"sort"
 
 	"golang.org/x/image/draw"
 )
-
-type Randn interface {
-	ExpFloat64() float64
-	Float32() float32
-	Float64() float64
-	Int() int
-	Int31() int32
-	Int31n(n int32) int32
-	Int63() int64
-	Int63n(n int64) int64
-	Intn(n int) int
-	NormFloat64() float64
-	Perm(n int) []int
-	Read(p []byte) (n int, err error)
-	Seed(seed int64)
-	Shuffle(n int, swap func(i, j int))
-	Uint32() uint32
-	Uint64() uint64
-}
 
 const (
 	FilterColor = iota
@@ -63,7 +45,7 @@ type FilterOptions struct {
 	BlockSize int
 }
 
-type filterConstructor func(opt *FilterOptions, r Randn) Filter
+type filterConstructor func(opt *FilterOptions) Filter
 
 type filterColor color.RGBA
 
@@ -79,7 +61,7 @@ func (f filterColor) String() string {
 	return fmt.Sprintf("color:[%d,%d,%d,%d]", f.R, f.G, f.B, f.A)
 }
 
-func newFilterColor(opt *FilterOptions, rand Randn) Filter {
+func newFilterColor(opt *FilterOptions) Filter {
 	a := uint32(rand.Intn(256))
 	r := (uint32(rand.Intn(256)) * a) / 0xff
 	g := (uint32(rand.Intn(256)) * a) / 0xff
@@ -87,7 +69,7 @@ func newFilterColor(opt *FilterOptions, rand Randn) Filter {
 	return filterColor(color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)})
 }
 
-func newFilterGray(opt *FilterOptions, rand Randn) Filter {
+func newFilterGray(opt *FilterOptions) Filter {
 	a := uint32(rand.Intn(256))
 	v := (uint32(rand.Intn(256)) * a) / 0xff
 	return filterColor(color.RGBA{uint8(v), uint8(v), uint8(v), uint8(a)})
@@ -123,11 +105,11 @@ func (f filterSetRGBAComp) String() string {
 	return fmt.Sprintf("rgba:{%d:%d}", f.c, f.v)
 }
 
-func newFilterSetRGBAComp(opt *FilterOptions, rand Randn) Filter {
+func newFilterSetRGBAComp(opt *FilterOptions) Filter {
 	return filterSetRGBAComp{uint8(rand.Intn(4)), uint8(rand.Intn(256))}
 }
 
-func newFilterSetA(opt *FilterOptions, rand Randn) Filter {
+func newFilterSetA(opt *FilterOptions) Filter {
 	return filterSetRGBAComp{3, uint8(rand.Intn(256))}
 }
 
@@ -147,7 +129,7 @@ func (f filterSource) String() string {
 	return "src"
 }
 
-func newFilterSource(opt *FilterOptions, rand Randn) Filter {
+func newFilterSource(opt *FilterOptions) Filter {
 	return filterSource{}
 }
 
@@ -172,7 +154,7 @@ func (f filterSetYCCComp) String() string {
 	return fmt.Sprintf("ycc:{%d:%d}", f.c, f.v)
 }
 
-func newFilterSetYCCComp(opt *FilterOptions, rand Randn) Filter {
+func newFilterSetYCCComp(opt *FilterOptions) Filter {
 	return filterSetYCCComp{uint8(rand.Intn(3)), uint8(rand.Intn(256))}
 }
 
@@ -202,12 +184,12 @@ func (f filterPermRGBA) String() string {
 	return fmt.Sprintf("prgba:[%d,%d,%d,%d]", f[0], f[1], f[2], f[3])
 }
 
-func newFilterPermRGBA(opt *FilterOptions, rand Randn) Filter {
+func newFilterPermRGBA(opt *FilterOptions) Filter {
 	p := rand.Perm(4)
 	return filterPermRGBA{p[0], p[1], p[2], p[3]}
 }
 
-func newFilterPermRGB(opt *FilterOptions, rand Randn) Filter {
+func newFilterPermRGB(opt *FilterOptions) Filter {
 	p := rand.Perm(3)
 	return filterPermRGBA{p[0], p[1], p[2], 3}
 }
@@ -242,12 +224,12 @@ func (f filterCopyComp) String() string {
 	return fmt.Sprintf("cc:[%d:%d]", f.d, f.s)
 }
 
-func newFilterCopyComp(opt *FilterOptions, rand Randn) Filter {
+func newFilterCopyComp(opt *FilterOptions) Filter {
 	p := rand.Perm(4)
 	return filterCopyComp{uint8(p[0]), uint8(p[1])}
 }
 
-func newFilterCToA(opt *FilterOptions, rand Randn) Filter {
+func newFilterCToA(opt *FilterOptions) Filter {
 	p := rand.Intn(3)
 	return filterCopyComp{3, uint8(p)}
 }
@@ -273,7 +255,7 @@ func (f filterPermYCC) String() string {
 	return fmt.Sprintf("pycc:[%d,%d,%d]", f[0], f[1], f[2])
 }
 
-func newFilterPermYCC(opt *FilterOptions, rand Randn) Filter {
+func newFilterPermYCC(opt *FilterOptions) Filter {
 	p := rand.Perm(3)
 	return filterPermYCC{p[0], p[1], p[2]}
 }
@@ -317,7 +299,7 @@ func (f filterMix) String() string {
 	)
 }
 
-func newFilterMix(opt *FilterOptions, rand Randn) Filter {
+func newFilterMix(opt *FilterOptions) Filter {
 	return filterMix{
 		[3]float64{2.0*rand.Float64() - 1.0, 2.0*rand.Float64() - 1.0, 2.0*rand.Float64() - 1.0},
 		[3]float64{2.0*rand.Float64() - 1.0, 2.0*rand.Float64() - 1.0, 2.0*rand.Float64() - 1.0},
@@ -366,11 +348,11 @@ func (f filterQuantRGBA) String() string {
 	return fmt.Sprintf("qrgba:[%d,%d,%d,%d]", f[0], f[1], f[2], f[3])
 }
 
-func newFilterQuantRGBA(opt *FilterOptions, rand Randn) Filter {
+func newFilterQuantRGBA(opt *FilterOptions) Filter {
 	return filterQuantRGBA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
 }
 
-func newFilterQuant(opt *FilterOptions, rand Randn) Filter {
+func newFilterQuant(opt *FilterOptions) Filter {
 	n := uint8(rand.Intn(8))
 	return filterQuantRGBA{n, n, n, uint8(rand.Intn(8))}
 }
@@ -409,11 +391,11 @@ func (f filterQuantYCCA) String() string {
 	return fmt.Sprintf("qycc:[%d,%d,%d,%d]", f[0], f[1], f[2], f[3])
 }
 
-func newFilterQuantYCCA(opt *FilterOptions, rand Randn) Filter {
+func newFilterQuantYCCA(opt *FilterOptions) Filter {
 	return filterQuantYCCA{uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8)), uint8(rand.Intn(8))}
 }
 
-func newFilterQuantY(opt *FilterOptions, rand Randn) Filter {
+func newFilterQuantY(opt *FilterOptions) Filter {
 	return filterQuantYCCA{uint8(rand.Intn(8)), 0, 0, 0}
 }
 
@@ -436,7 +418,7 @@ func (f filterInv) String() string {
 	return "inv"
 }
 
-func newFilterInv(opt *FilterOptions, rand Randn) Filter { return filterInv{} }
+func newFilterInv(opt *FilterOptions) Filter { return filterInv{} }
 
 type filterInvRGBAComp uint8
 
@@ -465,7 +447,7 @@ func (f filterInvRGBAComp) String() string {
 	return fmt.Sprintf("irgba:[%d]", f)
 }
 
-func newFilterInvRGBAComp(opt *FilterOptions, rand Randn) Filter {
+func newFilterInvRGBAComp(opt *FilterOptions) Filter {
 	return filterInvRGBAComp(rand.Intn(4))
 }
 
@@ -495,7 +477,7 @@ func (f filterInvYCCComp) String() string {
 	return fmt.Sprintf("iycc:[%d]", f)
 }
 
-func newFilterInvYCCComp(opt *FilterOptions, rand Randn) Filter {
+func newFilterInvYCCComp(opt *FilterOptions) Filter {
 	return filterInvYCCComp(rand.Intn(3))
 }
 
@@ -522,7 +504,7 @@ func (f filterGrayscale) String() string {
 	return "gs"
 }
 
-func newFilterGrayscale(opt *FilterOptions, rand Randn) Filter { return filterGrayscale{} }
+func newFilterGrayscale(opt *FilterOptions) Filter { return filterGrayscale{} }
 
 type filterBitRasp struct {
 	mode  uint8
@@ -605,7 +587,7 @@ func (f filterBitRasp) String() string {
 	return fmt.Sprintf("rasp:{m:%d,op:%d,b:%d,mask:%d,a:%d}", f.mode, f.op, f.bits, f.mask, f.alpha)
 }
 
-func newFilterBitRasp(opt *FilterOptions, rand Randn) Filter {
+func newFilterBitRasp(opt *FilterOptions) Filter {
 	ret := filterBitRasp{
 		mode:  uint8(rand.Intn(7)),
 		op:    uint8(rand.Intn(4)),
@@ -643,9 +625,9 @@ var filtersTable = []filterConstructor{
 	FilterBitRasp:     newFilterBitRasp,
 }
 
-func NewRandomizedFilter(f int, opt *FilterOptions, r Randn) Filter {
+func NewRandomizedFilter(f int, opt *FilterOptions) Filter {
 	if f < len(filtersTable) {
-		return filtersTable[f](opt, r)
+		return filtersTable[f](opt)
 	}
 	return nil
 }

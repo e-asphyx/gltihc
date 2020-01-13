@@ -6,12 +6,14 @@ import (
 	"image"
 	_ "image/jpeg"
 	"image/png"
+	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
@@ -181,6 +183,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}
+
+	rand.Seed(time.Now().UnixNano())
 
 	inputs := flag.Args()
 	for cnt, infile := range inputs {

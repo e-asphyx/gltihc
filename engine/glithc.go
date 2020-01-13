@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/image/draw"
@@ -59,11 +58,9 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 
 	threadsNum := opt.Threads
 	if threadsNum <= 0 {
-		threadsNum = runtime.NumCPU()
+		threadsNum = runtime.GOMAXPROCS(0)
 	}
 	log.Tracef("threadsNum: %d", threadsNum)
-
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	imageW := img.Bounds().Dx()
 	imageH := img.Bounds().Dy()
@@ -74,7 +71,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 	tmp1 := image.NewNRGBA64(image.Rect(0, 0, imageW, imageH))
 	draw.Draw(dst, dst.Bounds(), img, img.Bounds().Min, draw.Src)
 
-	iterations := opt.MinIterations + rnd.Intn(opt.MaxIterations-opt.MinIterations+1)
+	iterations := opt.MinIterations + rand.Intn(opt.MaxIterations-opt.MinIterations+1)
 	for itn := 0; itn < iterations; itn++ {
 		// Copy back
 		draw.Draw(src, src.Bounds(), dst, dst.Bounds().Min, draw.Src)
@@ -90,17 +87,17 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 			return nil, ErrImageTooSmall
 		}
 
-		p := opt.MinSegmentSize + rnd.Float64()*(opt.MaxSegmentSize-opt.MinSegmentSize)
+		p := opt.MinSegmentSize + rand.Float64()*(opt.MaxSegmentSize-opt.MinSegmentSize)
 		segBlocks := int(float64(blocks) * p)
 		if segBlocks == 0 {
 			continue
 		}
-		segStart := rnd.Intn(blocks - segBlocks + 1)
+		segStart := rand.Intn(blocks - segBlocks + 1)
 
 		var segShift int
-		if rnd.Intn(2) == 1 {
+		if rand.Intn(2) == 1 {
 			// Apply shift
-			segShift = rnd.Intn(blocks)
+			segShift = rand.Intn(blocks)
 		}
 
 		blocksPerThread := (segBlocks + threadsNum - 1) / threadsNum
@@ -109,7 +106,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 		draw.Draw(tmp0, tmp0.Bounds(), image.Transparent, tmp0.Bounds().Min, draw.Src)
 		draw.Draw(tmp1, tmp1.Bounds(), image.Transparent, tmp1.Bounds().Min, draw.Src)
 
-		filtersNum := opt.MinFilters + rnd.Intn(opt.MaxFilters-opt.MinFilters+1)
+		filtersNum := opt.MinFilters + rand.Intn(opt.MaxFilters-opt.MinFilters+1)
 		filters := make([]Filter, filtersNum)
 
 		fo := FilterOptions{
@@ -119,12 +116,12 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 		for i := range filters {
 			var n int
 			if opt.Filters != nil {
-				n = rnd.Intn(len(opt.Filters))
+				n = rand.Intn(len(opt.Filters))
 				n = GetFilterID(opt.Filters[n])
 			} else {
-				n = rnd.Intn(FilterNumFilters)
+				n = rand.Intn(FilterNumFilters)
 			}
-			if filters[i] = NewRandomizedFilter(n, &fo, rnd); filters[i] == nil {
+			if filters[i] = NewRandomizedFilter(n, &fo); filters[i] == nil {
 				return nil, ErrOptions
 			}
 		}
@@ -134,10 +131,10 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 			if i < filtersNum-1 {
 				ops[i] = GetOp(OpReplace)
 			} else if opt.Ops != nil {
-				opn := rnd.Intn(len(opt.Ops))
+				opn := rand.Intn(len(opt.Ops))
 				ops[i] = GetOpID(opt.Ops[opn])
 			} else {
-				opn := rnd.Intn(OpNumOps)
+				opn := rand.Intn(OpNumOps)
 				ops[i] = GetOp(opn)
 			}
 		}
