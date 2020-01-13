@@ -1,7 +1,8 @@
 import "./wasm_exec/wasm_exec.js";
 
 export type Option = "minIterations" | "maxIterations" | "blockSize" | "minSegmentSize" |
-    "maxSegmentSize" | "minFilters" | "maxFilters" | "filters" | "ops";
+    "maxSegmentSize" | "minFilters" | "maxFilters" | "filters" | "ops" | "maxWidth" | "maxHeight";
+;
 
 export type Options = {
     [prop in Option]: number | string[] | null;
@@ -30,6 +31,8 @@ export class Gltihc {
         minIterations: 10,
         minSegmentSize: 0.01,
         ops: null,
+        maxHeight: 1024,
+        maxWidth: 1024,
     };
 
     public readonly initDone: Promise<any>;

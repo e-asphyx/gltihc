@@ -8,6 +8,16 @@ const optionControls: Array<{
     prop: Option;
 }> = [
         {
+            label: "Maximum width",
+            min: 1,
+            prop: "maxWidth",
+        },
+        {
+            label: "Maximum height",
+            min: 1,
+            prop: "maxHeight",
+        },
+        {
             label: "Block size",
             min: 1,
             prop: "blockSize",
@@ -51,6 +61,8 @@ const optionControls: Array<{
 interface ToggleOptions {
     [name: string]: string;
 }
+
+const optionsVer = "0";
 
 const filterNames: ToggleOptions = {
     color: "Color",
@@ -112,9 +124,12 @@ class App {
 
     constructor() {
         this.gltihc.initDone.then(() => this.postWASMInit());
-        const val = this.storage.getItem("gltihc");
-        if (val) {
-            this.gltihc.options = JSON.parse(val);
+        let val = this.storage.getItem("gltihcVer");
+        if (val === optionsVer) {
+            val = this.storage.getItem("gltihc");
+            if (val) {
+                this.gltihc.options = JSON.parse(val);
+            }
         }
 
         if (this.gltihc.options.filters instanceof Array) {
@@ -131,17 +146,24 @@ class App {
         this.initSettings();
     }
 
-    private async refreshImage() {
-        this.showMessage("Processing...");
-        try {
-            const blob = await this.gltihc.processImage();
-            this.imageEl.src = URL.createObjectURL(blob);
-            this.imageEl.style.removeProperty("display");
-            this.showMessage(null);
-            this.refreshBtn.disabled = false;
-        } catch (err) {
-            this.showMessage(err);
+    private refreshImage() {
+        if (!this.gltihc.source) {
+            this.showMessage("No image loaded");
+            return;
         }
+        this.showMessage("Processing...");
+        // Redraw
+        setTimeout(async () => {
+            try {
+                const blob = await this.gltihc.processImage();
+                this.imageEl.src = URL.createObjectURL(blob);
+                this.imageEl.style.removeProperty("display");
+                this.showMessage(null);
+                this.refreshBtn.disabled = false;
+            } catch (err) {
+                this.showMessage(err);
+            }
+        });
     }
 
     private showMessage(msg: string | null) {
@@ -155,6 +177,7 @@ class App {
 
     private saveConfig() {
         this.storage.setItem("gltihc", JSON.stringify(this.gltihc.options));
+        this.storage.setItem("gltihcVer", optionsVer);
     }
 
     private formElement(label: string, id: string): Node {
@@ -247,7 +270,8 @@ class App {
     private postWASMInit() {
         const uploader = <HTMLInputElement>document.getElementById("uploader");
         uploader?.addEventListener("change", (ev) => {
-            this.gltihc.source = (<HTMLInputElement>ev.target)?.files?.[0];
+            const file = (<HTMLInputElement>ev.target)?.files?.[0];
+            this.gltihc.source = file;
             this.refreshImage();
         });
         document.getElementById("upload-btn")?.addEventListener("click", () => {

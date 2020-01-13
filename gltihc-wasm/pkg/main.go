@@ -10,6 +10,7 @@ import (
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/image/draw"
 )
 
 func processImageFunc(this js.Value, args []js.Value) interface{} {
@@ -34,6 +35,17 @@ func processImageFunc(this js.Value, args []js.Value) interface{} {
 		MaxFilters:     o.Get("maxFilters").Int(),
 	}
 
+	var (
+		maxW, maxH int
+	)
+
+	if prop := o.Get("maxWidth"); prop.Type() == js.TypeNumber {
+		maxW = prop.Int()
+	}
+	if prop := o.Get("maxHeight"); prop.Type() == js.TypeNumber {
+		maxH = prop.Int()
+	}
+
 	if prop := o.Get("filters"); prop.Type() == js.TypeObject {
 		opt.Filters = make([]string, prop.Length())
 		for i := range opt.Filters {
@@ -53,6 +65,24 @@ func processImageFunc(this js.Value, args []js.Value) interface{} {
 	if err != nil {
 		log.Error(err)
 		return err.Error()
+	}
+
+	srcW := sourceImg.Bounds().Dx()
+	srcH := sourceImg.Bounds().Dy()
+	if maxW != 0 && maxH != 0 && (srcW > maxW || srcH > maxH) {
+		// Scale image
+		var w, h int
+		if srcW-maxW > srcH-maxH {
+			w = maxW
+			h = int(float64(w)*float64(srcH)/float64(srcW) + 0.5)
+		} else {
+			h = maxH
+			w = int(float64(h)*float64(srcW)/float64(srcH) + 0.5)
+		}
+
+		scaled := image.NewNRGBA64(image.Rect(0, 0, w, h))
+		draw.BiLinear.Scale(scaled, scaled.Bounds(), sourceImg, sourceImg.Bounds(), draw.Over, nil)
+		sourceImg = scaled
 	}
 
 	resImg, err := opt.Apply(sourceImg)
