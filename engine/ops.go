@@ -18,47 +18,55 @@ const (
 	OpNumOps
 )
 
+type NRGBA [4]uint32
+
 type Operation interface {
-	Apply(dst, src color.Color) color.Color
+	Apply(dst, src NRGBA) NRGBA
 	String() string
 }
 
 type opCompose struct{}
 
-func (o opCompose) Apply(dst, src color.Color) color.Color {
-	sr, sg, sb, sa := src.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	a := sa + da*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+func (o opCompose) Apply(dst, src NRGBA) NRGBA {
+	if src[3] == 0xffff {
+		return src
+	}
+	sr := (src[0] * src[3]) / 0xffff
+	sg := (src[1] * src[3]) / 0xffff
+	sb := (src[2] * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opCompose) String() string { return "comp" }
 
 type opReplace struct{}
 
-func (o opReplace) Apply(dst, src color.Color) color.Color { return src }
+func (o opReplace) Apply(dst, src NRGBA) NRGBA { return src }
 
 func (o opReplace) String() string { return "rep" }
 
 type opAdd struct{}
 
-func (o opAdd) Apply(dst, src color.Color) color.Color {
-	sr, sg, sb, sa := src.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	a := sa + da*(0xffff-sa)/0xffff
-	if sa != 0 {
-		sr = (sr * 0xffff) / sa
-		sg = (sg * 0xffff) / sa
-		sb = (sb * 0xffff) / sa
-	}
-	if da != 0 {
-		sr += (dr * 0xffff) / da
-		sg += (dg * 0xffff) / da
-		sb += (db * 0xffff) / da
-	}
+func (o opAdd) Apply(dst, src NRGBA) NRGBA {
+	sr := src[0] + dst[0]
+	sg := src[1] + dst[1]
+	sb := src[2] + dst[2]
 	if sr > 0xffff {
 		sr = 0xffff
 	}
@@ -68,162 +76,285 @@ func (o opAdd) Apply(dst, src color.Color) color.Color {
 	if sb > 0xffff {
 		sb = 0xffff
 	}
-	// Premultiply
-	sr = (sr * a) / 0xffff
-	sg = (sg * a) / 0xffff
-	sb = (sb * a) / 0xffff
+
+	if src[3] == 0xffff {
+		return NRGBA{sr, sg, sb, src[3]}
+	}
+
 	// Compose
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+	sr = (sr * src[3]) / 0xffff
+	sg = (sg * src[3]) / 0xffff
+	sb = (sb * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opAdd) String() string { return "add" }
 
 type opAddRGBMod struct{}
 
-func (o opAddRGBMod) Apply(dst, src color.Color) color.Color {
-	sr, sg, sb, sa := src.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	a := sa + da*(0xffff-sa)/0xffff
-	if sa != 0 {
-		sr = (sr * 0xffff) / sa
-		sg = (sg * 0xffff) / sa
-		sb = (sb * 0xffff) / sa
-	}
-	if da != 0 {
-		sr += (dr * 0xffff) / da
-		sg += (dg * 0xffff) / da
-		sb += (db * 0xffff) / da
-	}
+func (o opAddRGBMod) Apply(dst, src NRGBA) NRGBA {
+	sr := src[0] + dst[0]
+	sg := src[1] + dst[1]
+	sb := src[2] + dst[2]
+
 	sr &= 0xffff
 	sg &= 0xffff
 	sb &= 0xffff
-	// Premultiply
-	sr = (sr * a) / 0xffff
-	sg = (sg * a) / 0xffff
-	sb = (sb * a) / 0xffff
+
+	if src[3] == 0xffff {
+		return NRGBA{sr, sg, sb, src[3]}
+	}
+
 	// Compose
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+	sr = (sr * src[3]) / 0xffff
+	sg = (sg * src[3]) / 0xffff
+	sb = (sb * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opAddRGBMod) String() string { return "addrgbm" }
 
 type opAddYCCMod struct{}
 
-func (o opAddYCCMod) Apply(dst, src color.Color) color.Color {
-	s := color.NYCbCrAModel.Convert(src).(color.NYCbCrA)
-	d := color.NYCbCrAModel.Convert(dst).(color.NYCbCrA)
-	s.Y = (s.Y + d.Y) & 0xff
-	s.Cb = uint8((int32(s.Cb) + int32(d.Cb) - 128) & 0xff)
-	s.Cr = uint8((int32(s.Cr) + int32(d.Cr) - 128) & 0xff)
+func (o opAddYCCMod) Apply(dst, src NRGBA) NRGBA {
+	sY, sCb, sCr := color.RGBToYCbCr(uint8(src[0]>>8), uint8(src[1]>>8), uint8(src[2]>>8))
+	dY, dCb, dCr := color.RGBToYCbCr(uint8(dst[0]>>8), uint8(dst[1]>>8), uint8(dst[2]>>8))
+
+	sY = (sY + dY) & 0xff
+	sCb = uint8((int32(sCb) + int32(dCb) - 128) & 0xff)
+	sCr = uint8((int32(sCr) + int32(dCr) - 128) & 0xff)
+
+	r8, g8, b8 := color.YCbCrToRGB(sY, sCb, sCr)
+	sr := (uint32(r8) << 8) | uint32(r8)
+	sg := (uint32(g8) << 8) | uint32(g8)
+	sb := (uint32(b8) << 8) | uint32(b8)
+
+	if src[3] == 0xffff {
+		return NRGBA{sr, sg, sb, src[3]}
+	}
+
 	// Compose
-	sr, sg, sb, sa := s.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	a := sa + da*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+	sr = (sr * src[3]) / 0xffff
+	sg = (sg * src[3]) / 0xffff
+	sb = (sb * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opAddYCCMod) String() string { return "addyccm" }
 
 type opMulRGB struct{}
 
-func (o opMulRGB) Apply(dst, src color.Color) color.Color {
-	sr, sg, sb, sa := src.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	a := sa + da*(0xffff-sa)/0xffff
-	if sa != 0 && da != 0 {
-		sr = (((sr * 0xffff) / sa) * ((dr * 0xffff) / da)) / 0xffff
-		sg = (((sg * 0xffff) / sa) * ((dg * 0xffff) / da)) / 0xffff
-		sb = (((sb * 0xffff) / sa) * ((db * 0xffff) / da)) / 0xffff
-	} else {
-		sr, sg, sb = 0, 0, 0
+func (o opMulRGB) Apply(dst, src NRGBA) NRGBA {
+	sr := (src[0] * dst[0]) / 0xffff
+	sg := (src[1] * dst[1]) / 0xffff
+	sb := (src[2] * dst[2]) / 0xffff
+	if sr > 0xffff {
+		sr = 0xffff
 	}
-	// Premultiply
-	sr = (sr * a) / 0xffff
-	sg = (sg * a) / 0xffff
-	sb = (sb * a) / 0xffff
+	if sg > 0xffff {
+		sg = 0xffff
+	}
+	if sb > 0xffff {
+		sb = 0xffff
+	}
+
+	if src[3] == 0xffff {
+		return NRGBA{sr, sg, sb, src[3]}
+	}
+
 	// Compose
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+	sr = (sr * src[3]) / 0xffff
+	sg = (sg * src[3]) / 0xffff
+	sb = (sb * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opMulRGB) String() string { return "mulrgb" }
 
 type opMulYCC struct{}
 
-func (o opMulYCC) Apply(dst, src color.Color) color.Color {
-	s := color.NYCbCrAModel.Convert(src).(color.NYCbCrA)
-	d := color.NYCbCrAModel.Convert(dst).(color.NYCbCrA)
-	s.Y = uint8(uint32(s.Y) * uint32(d.Y) / 0xff)
-	s.Cb = uint8((int32(s.Cb)-128)*(int32(d.Cb)-128)/0xff + 128)
-	s.Cr = uint8((int32(s.Cr)-128)*(int32(d.Cr)-128)/0xff + 128)
+func (o opMulYCC) Apply(dst, src NRGBA) NRGBA {
+	sY, sCb, sCr := color.RGBToYCbCr(uint8(src[0]>>8), uint8(src[1]>>8), uint8(src[2]>>8))
+	dY, dCb, dCr := color.RGBToYCbCr(uint8(dst[0]>>8), uint8(dst[1]>>8), uint8(dst[2]>>8))
+
+	sY = uint8(uint32(sY) * uint32(dY) / 0xff)
+	sCb = uint8((int32(sCb)-128)*(int32(dCb)-128)/0xff + 128)
+	sCr = uint8((int32(sCr)-128)*(int32(dCr)-128)/0xff + 128)
+
+	r8, g8, b8 := color.YCbCrToRGB(sY, sCb, sCr)
+	sr := (uint32(r8) << 8) | uint32(r8)
+	sg := (uint32(g8) << 8) | uint32(g8)
+	sb := (uint32(b8) << 8) | uint32(b8)
+
+	if src[3] == 0xffff {
+		return NRGBA{sr, sg, sb, src[3]}
+	}
+
 	// Compose
-	sr, sg, sb, sa := s.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	a := sa + da*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+	sr = (sr * src[3]) / 0xffff
+	sg = (sg * src[3]) / 0xffff
+	sb = (sb * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opMulYCC) String() string { return "mulycc" }
 
 type opXorRGB struct{}
 
-func (o opXorRGB) Apply(dst, src color.Color) color.Color {
-	sr, sg, sb, sa := src.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	a := sa + da*(0xffff-sa)/0xffff
-	if sa != 0 {
-		sr = ((sr * 0xffff) / sa)
-		sg = ((sg * 0xffff) / sa)
-		sb = ((sb * 0xffff) / sa)
+func (o opXorRGB) Apply(dst, src NRGBA) NRGBA {
+	sr := src[0] ^ dst[0]
+	sg := src[1] ^ dst[1]
+	sb := src[2] ^ dst[2]
+
+	if src[3] == 0xffff {
+		return NRGBA{sr, sg, sb, src[3]}
 	}
-	if da != 0 {
-		sr ^= ((dr * 0xffff) / da)
-		sg ^= ((dg * 0xffff) / da)
-		sb ^= ((db * 0xffff) / da)
-	}
-	// Premultiply
-	sr = (sr * a) / 0xffff
-	sg = (sg * a) / 0xffff
-	sb = (sb * a) / 0xffff
+
 	// Compose
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+	sr = (sr * src[3]) / 0xffff
+	sg = (sg * src[3]) / 0xffff
+	sb = (sb * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opXorRGB) String() string { return "xorrgb" }
 
 type opXorYCC struct{}
 
-func (o opXorYCC) Apply(dst, src color.Color) color.Color {
-	s := color.NYCbCrAModel.Convert(src).(color.NYCbCrA)
-	d := color.NYCbCrAModel.Convert(dst).(color.NYCbCrA)
-	s.Y = s.Y ^ d.Y
-	s.Cb = uint8(((int32(s.Cb) - 128) ^ (int32(d.Cb) - 128)) + 128)
-	s.Cr = uint8(((int32(s.Cr) - 128) ^ (int32(d.Cr) - 128)) + 128)
+func (o opXorYCC) Apply(dst, src NRGBA) NRGBA {
+	sY, sCb, sCr := color.RGBToYCbCr(uint8(src[0]>>8), uint8(src[1]>>8), uint8(src[2]>>8))
+	dY, dCb, dCr := color.RGBToYCbCr(uint8(dst[0]>>8), uint8(dst[1]>>8), uint8(dst[2]>>8))
+
+	sY = sY ^ dY
+	sCb = uint8(((int32(sCb) - 128) ^ (int32(dCb) - 128)) + 128)
+	sCr = uint8(((int32(sCr) - 128) ^ (int32(dCr) - 128)) + 128)
+
+	r8, g8, b8 := color.YCbCrToRGB(sY, sCb, sCr)
+	sr := (uint32(r8) << 8) | uint32(r8)
+	sg := (uint32(g8) << 8) | uint32(g8)
+	sb := (uint32(b8) << 8) | uint32(b8)
+
+	if src[3] == 0xffff {
+		return NRGBA{sr, sg, sb, src[3]}
+	}
+
 	// Compose
-	sr, sg, sb, sa := s.RGBA()
-	dr, dg, db, da := dst.RGBA()
-	r := sr + dr*(0xffff-sa)/0xffff
-	g := sg + dg*(0xffff-sa)/0xffff
-	b := sb + db*(0xffff-sa)/0xffff
-	a := sa + da*(0xffff-sa)/0xffff
-	return color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
+	sr = (sr * src[3]) / 0xffff
+	sg = (sg * src[3]) / 0xffff
+	sb = (sb * src[3]) / 0xffff
+
+	dr := (dst[0] * dst[3]) / 0xffff
+	dg := (dst[1] * dst[3]) / 0xffff
+	db := (dst[2] * dst[3]) / 0xffff
+
+	r := sr + dr*(0xffff-src[3])/0xffff
+	g := sg + dg*(0xffff-src[3])/0xffff
+	b := sb + db*(0xffff-src[3])/0xffff
+	a := src[3] + dst[3]*(0xffff-src[3])/0xffff
+
+	if a != 0 {
+		r = (r * 0xffff) / a
+		g = (g * 0xffff) / a
+		b = (b * 0xffff) / a
+	}
+
+	return NRGBA{r, g, b, a}
 }
 
 func (o opXorYCC) String() string { return "xorycc" }

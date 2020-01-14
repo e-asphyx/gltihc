@@ -6,8 +6,6 @@ import (
 	"image/color"
 	"math/rand"
 	"sort"
-
-	"golang.org/x/image/draw"
 )
 
 const (
@@ -29,6 +27,7 @@ const (
 	FilterQuantY
 	FilterInv
 	FilterInvRGBAComp
+	FilterInvA
 	FilterInvYCCComp
 	FilterGrayscale
 	FilterBitRasp
@@ -36,24 +35,50 @@ const (
 )
 
 type Filter interface {
-	Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation)
+	Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation)
 	String() string
 }
 
 type FilterOptions struct {
-	Reference image.Image
+	Reference *image.NRGBA64
 	BlockSize int
 }
 
 type filterConstructor func(opt *FilterOptions) Filter
 
-type filterColor color.RGBA
+type filterColor color.NRGBA
 
-func (f filterColor) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), color.RGBA(f)))
+func (f filterColor) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	sr := (uint32(f.R) << 8) | uint32(f.R)
+	sg := (uint32(f.G) << 8) | uint32(f.G)
+	sb := (uint32(f.B) << 8) | uint32(f.B)
+	sa := (uint32(f.A) << 8) | uint32(f.A)
+	s := NRGBA{sr, sg, sb, sa}
+
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, s)
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
 	}
 }
 
@@ -63,41 +88,60 @@ func (f filterColor) String() string {
 
 func newFilterColor(opt *FilterOptions) Filter {
 	a := uint32(rand.Intn(256))
-	r := (uint32(rand.Intn(256)) * a) / 0xff
-	g := (uint32(rand.Intn(256)) * a) / 0xff
-	b := (uint32(rand.Intn(256)) * a) / 0xff
-	return filterColor(color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a)})
+	r := uint32(rand.Intn(256))
+	g := uint32(rand.Intn(256))
+	b := uint32(rand.Intn(256))
+	return filterColor(color.NRGBA{uint8(r), uint8(g), uint8(b), uint8(a)})
 }
 
 func newFilterGray(opt *FilterOptions) Filter {
 	a := uint32(rand.Intn(256))
-	v := (uint32(rand.Intn(256)) * a) / 0xff
-	return filterColor(color.RGBA{uint8(v), uint8(v), uint8(v), uint8(a)})
+	v := uint32(rand.Intn(256))
+	return filterColor(color.NRGBA{uint8(v), uint8(v), uint8(v), uint8(a)})
 }
 
 type filterSetRGBAComp struct {
 	c, v uint8
 }
 
-func (f filterSetRGBAComp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
+func (f filterSetRGBAComp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
 	val := (uint32(f.v) << 8) | uint32(f.v)
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			if a != 0 {
-				r = (r * 0xffff) / a
-				g = (g * 0xffff) / a
-				b = (b * 0xffff) / a
-			}
-			v := [4]uint32{r, g, b, a}
+
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			v := NRGBA{sr, sg, sb, sa}
 			v[f.c] = val
-			a = v[3]
-			r = (v[0] * a) / 0xffff
-			g = (v[1] * a) / 0xffff
-			b = (v[2] * a) / 0xffff
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, v)
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -115,13 +159,39 @@ func newFilterSetA(opt *FilterOptions) Filter {
 
 type filterSource struct{}
 
-func (f filterSource) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+func (f filterSource) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{sr, sg, sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -137,16 +207,48 @@ type filterSetYCCComp struct {
 	c, v uint8
 }
 
-func (f filterSetYCCComp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			s := src.At(sp.X+x, sp.Y+y)
-			ycc := color.NYCbCrAModel.Convert(s).(color.NYCbCrA)
-			v := [3]uint8{ycc.Y, ycc.Cb, ycc.Cr}
+func (f filterSetYCCComp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			sY, sCb, sCr := color.RGBToYCbCr(uint8(sr>>8), uint8(sg>>8), uint8(sb>>8))
+			v := [3]uint8{sY, sCb, sCr}
 			v[f.c] = f.v
-			c := color.NYCbCrA{color.YCbCr{v[0], v[1], v[2]}, ycc.A}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+
+			r8, g8, b8 := color.YCbCrToRGB(v[0], v[1], v[2])
+			sr = (uint32(r8) << 8) | uint32(r8)
+			sg = (uint32(g8) << 8) | uint32(g8)
+			sb = (uint32(b8) << 8) | uint32(b8)
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{sr, sg, sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -160,23 +262,40 @@ func newFilterSetYCCComp(opt *FilterOptions) Filter {
 
 type filterPermRGBA [4]int
 
-func (f filterPermRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			if a != 0 {
-				r = (r * 0xffff) / a
-				g = (g * 0xffff) / a
-				b = (b * 0xffff) / a
-			}
-			v := [4]uint32{r, g, b, a}
-			a = v[f[3]]
-			r = (v[f[0]] * a) / 0xffff
-			g = (v[f[1]] * a) / 0xffff
-			b = (v[f[2]] * a) / 0xffff
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+func (f filterPermRGBA) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			v := NRGBA{sr, sg, sb, sa}
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{v[f[0]], v[f[1]], v[f[2]], v[f[3]]})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -199,24 +318,41 @@ type filterCopyComp struct {
 	s uint8
 }
 
-func (f filterCopyComp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			if a != 0 {
-				r = (r * 0xffff) / a
-				g = (g * 0xffff) / a
-				b = (b * 0xffff) / a
-			}
-			v := [4]uint32{r, g, b, a}
+func (f filterCopyComp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			v := NRGBA{sr, sg, sb, sa}
 			v[f.d] = v[f.s]
-			a = v[3]
-			r = (v[0] * a) / 0xffff
-			g = (v[1] * a) / 0xffff
-			b = (v[2] * a) / 0xffff
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+			c := op.Apply(NRGBA{dr, dg, db, da}, v)
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -236,18 +372,47 @@ func newFilterCToA(opt *FilterOptions) Filter {
 
 type filterPermYCC [3]int
 
-func (f filterPermYCC) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			s := src.At(sp.X+x, sp.Y+y)
-			ycc := color.NYCbCrAModel.Convert(s).(color.NYCbCrA)
-			v := [3]uint8{ycc.Y, ycc.Cb, ycc.Cr}
-			yy := v[f[0]]
-			cb := v[f[1]]
-			cr := v[f[2]]
-			c := color.NYCbCrA{color.YCbCr{yy, cb, cr}, ycc.A}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+func (f filterPermYCC) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			sY, sCb, sCr := color.RGBToYCbCr(uint8(sr>>8), uint8(sg>>8), uint8(sb>>8))
+			v := [3]uint8{sY, sCb, sCr}
+
+			r8, g8, b8 := color.YCbCrToRGB(v[f[0]], v[f[1]], v[f[2]])
+			sr = (uint32(r8) << 8) | uint32(r8)
+			sg = (uint32(g8) << 8) | uint32(g8)
+			sb = (uint32(b8) << 8) | uint32(b8)
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{sr, sg, sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -262,13 +427,29 @@ func newFilterPermYCC(opt *FilterOptions) Filter {
 
 type filterMix [3][3]float64
 
-func (f filterMix) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			rr := int32(f[0][0]*float64(r) + f[0][1]*float64(g) + f[0][2]*float64(b))
-			gg := int32(f[1][0]*float64(r) + f[1][1]*float64(g) + f[1][2]*float64(b))
-			bb := int32(f[2][0]*float64(r) + f[2][1]*float64(g) + f[2][2]*float64(b))
+func (f filterMix) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			rr := int32(f[0][0]*float64(sr) + f[0][1]*float64(sg) + f[0][2]*float64(sb))
+			gg := int32(f[1][0]*float64(sr) + f[1][1]*float64(sg) + f[1][2]*float64(sb))
+			bb := int32(f[2][0]*float64(sr) + f[2][1]*float64(sg) + f[2][2]*float64(sb))
+
 			if rr < 0 {
 				rr = 0
 			} else if rr > 0xffff {
@@ -284,9 +465,21 @@ func (f filterMix) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp
 			} else if bb > 0xffff {
 				bb = 0xffff
 			}
-			c := color.RGBA64{uint16(rr), uint16(gg), uint16(bb), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{uint32(rr), uint32(gg), uint32(bb), sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -309,38 +502,58 @@ func newFilterMix(opt *FilterOptions) Filter {
 
 type filterQuantRGBA [4]uint8
 
-func (f filterQuantRGBA) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
+func (f filterQuantRGBA) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
 	m := [4]uint32{1 << (f[0] + 8), 1 << (f[1] + 8), 1 << (f[2] + 8), 1 << (f[3] + 8)}
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			if a != 0 {
-				r = (r * 0xffff) / a
-				g = (g * 0xffff) / a
-				b = (b * 0xffff) / a
+
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			sr = (sr + (m[0] >> 1)) &^ (m[0] - 1)
+			sg = (sg + (m[1] >> 1)) &^ (m[1] - 1)
+			sb = (sb + (m[2] >> 1)) &^ (m[2] - 1)
+			sa = (sa + (m[3] >> 1)) &^ (m[3] - 1)
+			if sr > 0xffff {
+				sr = 0xffff
 			}
-			r = (r + (m[0] >> 1)) &^ (m[0] - 1)
-			g = (g + (m[1] >> 1)) &^ (m[1] - 1)
-			b = (b + (m[2] >> 1)) &^ (m[2] - 1)
-			a = (a + (m[3] >> 1)) &^ (m[3] - 1)
-			if r > 0xffff {
-				r = 0xffff
+			if sg > 0xffff {
+				sg = 0xffff
 			}
-			if g > 0xffff {
-				g = 0xffff
+			if sb > 0xffff {
+				sb = 0xffff
 			}
-			if b > 0xffff {
-				b = 0xffff
+			if sa > 0xffff {
+				sa = 0xffff
 			}
-			if a > 0xffff {
-				a = 0xffff
-			}
-			r = (r * a) / 0xffff
-			g = (g * a) / 0xffff
-			b = (b * a) / 0xffff
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{sr, sg, sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -359,16 +572,32 @@ func newFilterQuant(opt *FilterOptions) Filter {
 
 type filterQuantYCCA [4]uint8
 
-func (f filterQuantYCCA) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
+func (f filterQuantYCCA) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
 	m := [4]uint32{1 << f[0], 1 << f[1], 1 << f[2], 1 << f[3]}
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			s := src.At(sp.X+x, sp.Y+y)
-			ycc := color.NYCbCrAModel.Convert(s).(color.NYCbCrA)
-			yy := (uint32(ycc.Y) + (m[0] >> 1)) &^ (m[0] - 1)
-			cb := (uint32(ycc.Cb) + (m[1] >> 1)) &^ (m[1] - 1)
-			cr := (uint32(ycc.Cr) + (m[2] >> 1)) &^ (m[2] - 1)
-			a := (uint32(ycc.A) + (m[3] >> 1)) &^ (m[3] - 1)
+
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			sY, sCb, sCr := color.RGBToYCbCr(uint8(sr>>8), uint8(sg>>8), uint8(sb>>8))
+			yy := (uint32(sY) + (m[0] >> 1)) &^ (m[0] - 1)
+			cb := (uint32(sCb) + (m[1] >> 1)) &^ (m[1] - 1)
+			cr := (uint32(sCr) + (m[2] >> 1)) &^ (m[2] - 1)
+			aa := (uint32(sa>>8) + (m[3] >> 1)) &^ (m[3] - 1)
 			if yy > 0xff {
 				yy = 0xff
 			}
@@ -378,12 +607,30 @@ func (f filterQuantYCCA) Apply(dst draw.Image, dr image.Rectangle, src image.Ima
 			if cr > 0xff {
 				cr = 0xff
 			}
-			if a > 0xff {
-				a = 0xff
+			if aa > 0xff {
+				aa = 0xff
 			}
-			c := color.NYCbCrA{color.YCbCr{Y: uint8(yy), Cb: uint8(cb), Cr: uint8(cr)}, uint8(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+
+			r8, g8, b8 := color.YCbCrToRGB(uint8(yy), uint8(cb), uint8(cr))
+			sr = (uint32(r8) << 8) | uint32(r8)
+			sg = (uint32(g8) << 8) | uint32(g8)
+			sb = (uint32(b8) << 8) | uint32(b8)
+			sa = (uint32(aa) << 8) | uint32(aa)
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{sr, sg, sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -401,16 +648,39 @@ func newFilterQuantY(opt *FilterOptions) Filter {
 
 type filterInv struct{}
 
-func (f filterInv) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			r = a - r
-			g = a - g
-			b = a - b
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+func (f filterInv) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{0xffff - sr, 0xffff - sg, 0xffff - sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -422,24 +692,42 @@ func newFilterInv(opt *FilterOptions) Filter { return filterInv{} }
 
 type filterInvRGBAComp uint8
 
-func (f filterInvRGBAComp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			if a != 0 {
-				r = (r * 0xffff) / a
-				g = (g * 0xffff) / a
-				b = (b * 0xffff) / a
-			}
-			v := [4]uint32{r, g, b, a}
+func (f filterInvRGBAComp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			v := NRGBA{sr, sg, sb, sa}
 			v[f] = 0xffff - v[f]
-			a = v[3]
-			r = (v[0] * a) / 0xffff
-			g = (v[1] * a) / 0xffff
-			b = (v[2] * a) / 0xffff
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, v)
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -451,14 +739,33 @@ func newFilterInvRGBAComp(opt *FilterOptions) Filter {
 	return filterInvRGBAComp(rand.Intn(4))
 }
 
+func newFilterInvA(opt *FilterOptions) Filter {
+	return filterInvRGBAComp(3)
+}
+
 type filterInvYCCComp uint8
 
-func (f filterInvYCCComp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			s := src.At(sp.X+x, sp.Y+y)
-			ycc := color.NYCbCrAModel.Convert(s).(color.NYCbCrA)
-			v := [3]uint32{uint32(ycc.Y), uint32(ycc.Cb), uint32(ycc.Cr)}
+func (f filterInvYCCComp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			sY, sCb, sCr := color.RGBToYCbCr(uint8(sr>>8), uint8(sg>>8), uint8(sb>>8))
+			v := [3]uint32{uint32(sY), uint32(sCb), uint32(sCr)}
 			v[f] = 0xff - v[f]
 			if f > 0 {
 				// for color components zero = 128
@@ -467,9 +774,26 @@ func (f filterInvYCCComp) Apply(dst draw.Image, dr image.Rectangle, src image.Im
 					v[f] = 0xff
 				}
 			}
-			c := color.NYCbCrA{color.YCbCr{uint8(v[0]), uint8(v[1]), uint8(v[2])}, ycc.A}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+
+			r8, g8, b8 := color.YCbCrToRGB(uint8(v[0]), uint8(v[1]), uint8(v[2]))
+			sr = (uint32(r8) << 8) | uint32(r8)
+			sg = (uint32(g8) << 8) | uint32(g8)
+			sb = (uint32(b8) << 8) | uint32(b8)
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{sr, sg, sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -483,20 +807,41 @@ func newFilterInvYCCComp(opt *FilterOptions) Filter {
 
 type filterGrayscale struct{}
 
-func (f filterGrayscale) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			if a != 0 {
-				r = (r * 0xffff) / a
-				g = (g * 0xffff) / a
-				b = (b * 0xffff) / a
-			}
-			yy := (19595*r + 38470*g + 7471*b + 1<<15) >> 16
-			yy = (yy * a) / 0xffff
-			c := color.RGBA64{uint16(yy), uint16(yy), uint16(yy), uint16(a)}
-			dst.Set(dr.Min.X+x, dr.Min.Y+y, op.Apply(dst.At(dr.Min.X+x, dr.Min.Y+y), c))
+func (f filterGrayscale) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
+			yy := (19595*sr + 38470*sg + 7471*sb + 1<<15) >> 16
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{yy, yy, yy, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -514,72 +859,91 @@ type filterBitRasp struct {
 	alpha uint8
 }
 
-func (f filterBitRasp) Apply(dst draw.Image, dr image.Rectangle, src image.Image, sp image.Point, op Operation) {
+func (f filterBitRasp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
 	var m uint32
 	if f.bits != 0 {
 		m = (uint32(1) << f.bits) - 1
 	} else {
 		m = uint32(f.mask)
 	}
-	for y := 0; y < dr.Dy(); y++ {
-		for x := 0; x < dr.Dx(); x++ {
-			r, g, b, a := src.At(sp.X+x, sp.Y+y).RGBA()
-			if a != 0 {
-				r = (r * 0xffff) / a
-				g = (g * 0xffff) / a
-				b = (b * 0xffff) / a
-			}
-			dx, dy := dr.Min.X+x, dr.Min.Y+y
+
+	si := sp.Y*src.Stride + (sp.X << 3)
+	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
+	w := dr.Dx()
+	for y := dr.Min.Y; y < dr.Max.Y; y++ {
+		dstSpan := dst.Pix[di : di+(w<<3) : di+(w<<3)]
+		srcSpan := src.Pix[si : si+(w<<3) : si+(w<<3)]
+		var i int
+		for x := dr.Min.X; x < dr.Max.X; x++ {
+			sr := (uint32(srcSpan[i+0]) << 8) | uint32(srcSpan[i+1])
+			sg := (uint32(srcSpan[i+2]) << 8) | uint32(srcSpan[i+3])
+			sb := (uint32(srcSpan[i+4]) << 8) | uint32(srcSpan[i+5])
+			sa := (uint32(srcSpan[i+6]) << 8) | uint32(srcSpan[i+7])
+
+			dr := (uint32(dstSpan[i+0]) << 8) | uint32(dstSpan[i+1])
+			dg := (uint32(dstSpan[i+2]) << 8) | uint32(dstSpan[i+3])
+			db := (uint32(dstSpan[i+4]) << 8) | uint32(dstSpan[i+5])
+			da := (uint32(dstSpan[i+6]) << 8) | uint32(dstSpan[i+7])
+
 			var mix uint32
 			switch f.mode {
 			case 0:
-				mix = uint32(dx)
+				mix = uint32(x)
 			case 1:
-				mix = uint32(dy)
+				mix = uint32(y)
 			case 2:
-				mix = uint32(dy + dx)
+				mix = uint32(y + x)
 			case 3:
-				mix = uint32(dy - dx)
+				mix = uint32(y - x)
 			case 4:
-				mix = uint32(dy) | uint32(dx)
+				mix = uint32(y) | uint32(x)
 			case 5:
-				mix = uint32(dy) & uint32(dx)
+				mix = uint32(y) & uint32(x)
 			default:
-				mix = uint32(dy) ^ uint32(dx)
+				mix = uint32(y) ^ uint32(x)
 			}
 			mix = (mix & m) << 8
-			aa := a
+			aa := sa
 			switch f.op {
 			case 0:
-				r &= mix
-				g &= mix
-				b &= mix
+				sr &= mix
+				sg &= mix
+				sb &= mix
 				aa &= mix
 			case 1:
-				r ^= mix
-				g ^= mix
-				b ^= mix
+				sr ^= mix
+				sg ^= mix
+				sb ^= mix
 				aa ^= mix
 			case 2:
-				r |= mix
-				g |= mix
-				b |= mix
+				sr |= mix
+				sg |= mix
+				sb |= mix
 				aa |= mix
 			default:
-				r = r&^m | mix
-				g = g&^m | mix
-				b = b&^m | mix
+				sr = sr&^m | mix
+				sg = sg&^m | mix
+				sb = sb&^m | mix
 				aa = aa&^m | mix
 			}
 			if f.alpha == 1 {
-				a = aa
+				sa = aa
 			}
-			r = (r * a) / 0xffff
-			g = (g * a) / 0xffff
-			b = (b * a) / 0xffff
-			c := color.RGBA64{uint16(r), uint16(g), uint16(b), uint16(a)}
-			dst.Set(dx, dy, op.Apply(dst.At(dx, dy), c))
+
+			c := op.Apply(NRGBA{dr, dg, db, da}, NRGBA{sr, sg, sb, sa})
+
+			dstSpan[i+0] = uint8(c[0] >> 8)
+			dstSpan[i+1] = uint8(c[0])
+			dstSpan[i+2] = uint8(c[1] >> 8)
+			dstSpan[i+3] = uint8(c[1])
+			dstSpan[i+4] = uint8(c[2] >> 8)
+			dstSpan[i+5] = uint8(c[2])
+			dstSpan[i+6] = uint8(c[3] >> 8)
+			dstSpan[i+7] = uint8(c[3])
+			i += 8
 		}
+		di += dst.Stride
+		si += src.Stride
 	}
 }
 
@@ -620,6 +984,7 @@ var filtersTable = []filterConstructor{
 	FilterQuantY:      newFilterQuantY,
 	FilterInv:         newFilterInv,
 	FilterInvRGBAComp: newFilterInvRGBAComp,
+	FilterInvA:        newFilterInvA,
 	FilterInvYCCComp:  newFilterInvYCCComp,
 	FilterGrayscale:   newFilterGrayscale,
 	FilterBitRasp:     newFilterBitRasp,
@@ -651,6 +1016,7 @@ var filterNames = map[string]int{
 	"qy":      FilterQuantY,
 	"inv":     FilterInv,
 	"invrgba": FilterInvRGBAComp,
+	"inva":    FilterInvA,
 	"invycc":  FilterInvYCCComp,
 	"gs":      FilterGrayscale,
 	"rasp":    FilterBitRasp,

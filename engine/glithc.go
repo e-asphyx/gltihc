@@ -103,8 +103,10 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 		blocksPerThread := (segBlocks + threadsNum - 1) / threadsNum
 
 		// Clear intermediate images
-		draw.Draw(tmp0, tmp0.Bounds(), image.Transparent, tmp0.Bounds().Min, draw.Src)
-		draw.Draw(tmp1, tmp1.Bounds(), image.Transparent, tmp1.Bounds().Min, draw.Src)
+		stripeY0 := (segStart / blocksX) * opt.BlockSize
+		stripeY1 := ((segStart+segBlocks)/blocksX + 1) * opt.BlockSize
+		draw.Draw(tmp0, image.Rect(0, stripeY0, imageW, stripeY1), image.Transparent, image.Point{0, 0}, draw.Src)
+		draw.Draw(tmp1, image.Rect(0, stripeY0, imageW, stripeY1), image.Transparent, image.Point{0, 0}, draw.Src)
 
 		filtersNum := opt.MinFilters + rand.Intn(opt.MaxFilters-opt.MinFilters+1)
 		filters := make([]Filter, filtersNum)
@@ -149,7 +151,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 
 		for fc := 0; fc < filtersNum; fc++ {
 			var (
-				ss, dd draw.Image
+				ss, dd *image.NRGBA64
 			)
 			if fc == 0 {
 				ss = src
@@ -198,6 +200,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 		}
 	}
 
+	// Convert to 8bpp
 	ret := image.NewNRGBA(image.Rect(0, 0, dst.Bounds().Dx(), dst.Bounds().Dy()))
 	draw.Draw(ret, ret.Bounds(), dst, dst.Bounds().Min, draw.Src)
 
