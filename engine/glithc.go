@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"unsafe"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/image/draw"
@@ -30,6 +31,19 @@ var (
 	ErrOptions       = errors.New("invalid engine options")
 	ErrImageTooSmall = errors.New("image is too small")
 )
+
+func copyImage(dst, src *image.NRGBA64) {
+	dst.Rect = src.Rect
+	dst.Stride = src.Stride
+	copy(dst.Pix, src.Pix)
+}
+
+func clearStripe(img *image.NRGBA64, y0, y1 int) {
+	stripe := (*[(1<<31 - 1) >> 3]uint64)(unsafe.Pointer(&img.Pix[0]))[((y0 * img.Stride) >> 3):((y1 * img.Stride) >> 3):((y1 * img.Stride) >> 3)]
+	for i := range stripe {
+		stripe[i] = 0
+	}
+}
 
 func (opt *Options) Apply(img image.Image) (image.Image, error) {
 	if opt.BlockSize <= 0 ||
@@ -74,7 +88,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 	iterations := opt.MinIterations + rand.Intn(opt.MaxIterations-opt.MinIterations+1)
 	for itn := 0; itn < iterations; itn++ {
 		// Copy back
-		draw.Draw(src, src.Bounds(), dst, dst.Bounds().Min, draw.Src)
+		copyImage(src, dst)
 
 		blocksX := imageW / opt.BlockSize
 		blocksY := imageH / opt.BlockSize
@@ -105,8 +119,8 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 		// Clear intermediate images
 		stripeY0 := (segStart / blocksX) * opt.BlockSize
 		stripeY1 := ((segStart+segBlocks)/blocksX + 1) * opt.BlockSize
-		draw.Draw(tmp0, image.Rect(0, stripeY0, imageW, stripeY1), image.Transparent, image.Point{0, 0}, draw.Src)
-		draw.Draw(tmp1, image.Rect(0, stripeY0, imageW, stripeY1), image.Transparent, image.Point{0, 0}, draw.Src)
+		clearStripe(tmp0, stripeY0, stripeY1)
+		clearStripe(tmp1, stripeY0, stripeY1)
 
 		filtersNum := opt.MinFilters + rand.Intn(opt.MaxFilters-opt.MinFilters+1)
 		filters := make([]Filter, filtersNum)
