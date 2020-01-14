@@ -65,6 +65,7 @@ var presets = map[string]preset{
 			"quant",
 			"qy",
 			"inv",
+			"inva",
 			"gs",
 			"rasp",
 		},

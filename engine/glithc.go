@@ -39,7 +39,9 @@ func copyImage(dst, src *image.NRGBA64) {
 }
 
 func clearStripe(img *image.NRGBA64, y0, y1 int) {
-	stripe := (*[(1<<31 - 1) >> 3]uint64)(unsafe.Pointer(&img.Pix[0]))[((y0 * img.Stride) >> 3):((y1 * img.Stride) >> 3):((y1 * img.Stride) >> 3)]
+	s64 := (*[(1<<31 - 1) >> 3]uint64)(unsafe.Pointer(&img.Pix[0]))[:len(img.Pix)>>3]
+	stride := img.Stride >> 3
+	stripe := s64[y0*stride : y1*stride : y1*stride]
 	for i := range stripe {
 		stripe[i] = 0
 	}
