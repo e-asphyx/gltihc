@@ -6,7 +6,9 @@ import (
 	"image"
 	"image/jpeg"
 	_ "image/png"
+	"math/rand"
 	"syscall/js"
+	"time"
 
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
@@ -104,6 +106,8 @@ func processImageFunc(this js.Value, args []js.Value) interface{} {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	js.Global().Set("_gltihcProcessImage", js.FuncOf(processImageFunc))
 
 	if v := js.Global().Get("_gltihcInitDone"); v.Type() == js.TypeFunction {
