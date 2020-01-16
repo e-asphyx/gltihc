@@ -70,8 +70,7 @@ a:hover, a:focus {
 }
 
 .header, .panel, header {
-    flex-shrink: 0;
-    flex-grow: 0;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: row;
 }
@@ -99,13 +98,14 @@ svg.icon {
 }
 
 .panel > button, .panel > .button, .panel > input[type="button"] {
-    flex-grow: 1;
+    flex: 1 1 auto;
 }
 
 .content-container {
-    flex-grow: 1;
+    flex: 1 1 auto;
     position: relative;
     height: 100%;
+    max-height: 100%;
 }
 
 .logo {
@@ -314,6 +314,7 @@ form > .row > label {
 
 #target-img {
     width: 100%;
+    height: 100%;
     max-height: 100%;
-    object-fit: contain;
+    object-fit: scale-down;
 }

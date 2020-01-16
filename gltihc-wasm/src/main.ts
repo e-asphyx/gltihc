@@ -75,6 +75,7 @@ class App {
     private push(page: Page) {
         history.pushState(page, this.pages[page].title);
         this.showPage(page);
+        window.scroll(0, 0);
     }
 
     private showPage(page: Page) {
