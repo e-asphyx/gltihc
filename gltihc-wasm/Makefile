@@ -6,7 +6,7 @@ GO_SRC := $(SRC_DIR)/main.go
 STATIC_SRC := \
 	./static/index.html \
 	./static/style.css \
-	./node_modules/mini.css/dist/mini-dark.min.css
+	./node_modules/normalize.css/normalize.css
 
 BIN = $(DIST_DIR)/gltihc.wasm
 STATIC = $(addprefix $(DIST_DIR)/, $(notdir $(STATIC_SRC)))
