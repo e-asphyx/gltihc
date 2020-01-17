@@ -262,7 +262,7 @@ input:not([type]), [type="text"], [type="email"], [type="number"], [type="search
 [type="password"], [type="url"], [type="tel"], [type="checkbox"], [type="radio"],
 textarea, select {
     box-sizing: border-box;
-    padding: calc(0.5 * var(--universal-padding)) var(--universal-padding);
+    padding: calc(0.75 * var(--universal-padding)) var(--universal-padding);
     background: var(--input-back-color);
     color: var(--fore-color);
     border: 0;
@@ -270,7 +270,7 @@ textarea, select {
 }
 
 :root {
-    --checkbox-size: calc(1rem + 0.5*var(--universal-padding));
+    --checkbox-size: calc(1rem + 0.75*var(--universal-padding));
 }
 
 [type="checkbox"], [type="radio"] {
