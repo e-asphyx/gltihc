@@ -68,7 +68,7 @@ const filterNames = {
     qy: "Quantize Y",
     inv: "Invert",
     invrgba: "Invert RGBA component",
-    inva: "Invert lpha",
+    inva: "Invert alpha",
     invycc: "Invert YCC component",
     gs: "Gray Scale",
     rasp: "BitRasp",
