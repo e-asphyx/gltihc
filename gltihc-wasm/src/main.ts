@@ -16,6 +16,7 @@ type Pages = {
     [page in Page]: {
         node: Node,
         title: string,
+        url?: string,
     };
 };
 
@@ -73,9 +74,8 @@ class App {
     }
 
     private push(page: Page) {
-        history.pushState(page, this.pages[page].title);
+        history.pushState(page, this.pages[page].title, this.pages[page].url);
         this.showPage(page);
-        // window.scroll(0, 0);
     }
 
     private showPage(page: Page) {

@@ -12,11 +12,12 @@
     --secondary-border-color: #aaa;
     --toast-back-color: #424242;
     --toast-fore-color: #fafafa;  
-    --universal-margin: 0.75rem;
-    --universal-padding: 0.75rem;
+    --universal-margin: 0.5rem;
+    --universal-padding: 0.5rem;
     --universal-border-radius: 0.125rem;
     --heading-ratio: 1.19;
     --input-back-color: #444;
+    --panel-ratio: 6.3;
 }
 
 html, body {
@@ -40,7 +41,6 @@ html {
 body {
     color: var(--fore-color);
     background: var(--back-color);
-    overflow: scroll;
 }
 
 a {
@@ -80,7 +80,7 @@ a:hover, a:focus {
     align-content: center;
     background: var(--header-back-color);
     color: var(--header-fore-color);
-    height: 3.5rem;
+    height: calc(var(--universal-padding) * var(--panel-ratio));
 }
 
 i[class$="icons"], .icon {
@@ -94,7 +94,7 @@ svg.icon {
 }
 
 .panel.bottom {
-    height: 3.5rem;
+    height: calc(var(--universal-padding) * var(--panel-ratio));
 }
 
 .panel > button, .panel > .button, .panel > input[type="button"] {
