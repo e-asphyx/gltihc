@@ -51,9 +51,8 @@ class App {
         this.push(this.currentPage);
     }
     push(page) {
-        history.pushState(page, this.pages[page].title);
+        history.pushState(page, this.pages[page].title, this.pages[page].url);
         this.showPage(page);
-        // window.scroll(0, 0);
     }
     showPage(page) {
         if (this.root && page !== this.currentPage) {
