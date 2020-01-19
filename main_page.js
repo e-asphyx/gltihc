@@ -49,7 +49,9 @@ export default class MainPage {
             ev.preventDefault();
         });
         (_d = dz) === null || _d === void 0 ? void 0 : _d.addEventListener("drop", (ev) => {
+            var _a;
             ev.preventDefault();
+            (_a = ev.target) === null || _a === void 0 ? void 0 : _a.classList.remove("drag-over");
             const dt = ev.dataTransfer;
             if (!dt) {
                 return;
@@ -57,6 +59,7 @@ export default class MainPage {
             const uri = dt.getData("text/uri-list") || dt.getData("text/plain");
             if (uri) {
                 fetch(uri).then((resp) => {
+                    console.log(resp);
                     if (resp.ok) {
                         return resp.blob();
                     }
@@ -68,7 +71,7 @@ export default class MainPage {
                         this.gltihc.source = blob;
                         this.refreshImage();
                     }
-                });
+                }).catch((err) => this.message(String(err)));
                 return;
             }
             for (const f of dt.files) {
