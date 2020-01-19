@@ -49,14 +49,33 @@ export default class MainPage {
             ev.preventDefault();
         });
         (_d = dz) === null || _d === void 0 ? void 0 : _d.addEventListener("drop", (ev) => {
-            var _a, _b, _c;
             ev.preventDefault();
-            if (ev.dataTransfer) {
-                const file = ((_b = (_a = ev.dataTransfer.items) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.kind) === "file" ?
-                    ev.dataTransfer.items[0].getAsFile() : (_c = ev.dataTransfer.files) === null || _c === void 0 ? void 0 : _c[0];
-                if (file) {
-                    this.gltihc.source = file;
+            const dt = ev.dataTransfer;
+            if (!dt) {
+                return;
+            }
+            const uri = dt.getData("text/uri-list") || dt.getData("text/plain");
+            if (uri) {
+                fetch(uri).then((resp) => {
+                    if (resp.ok) {
+                        return resp.blob();
+                    }
+                    else {
+                        throw new Error(resp.statusText);
+                    }
+                }).then((blob) => {
+                    if (blob.type.match("^image/")) {
+                        this.gltihc.source = blob;
+                        this.refreshImage();
+                    }
+                });
+                return;
+            }
+            for (const f of dt.files) {
+                if (f.type.match("^image/")) {
+                    this.gltihc.source = f;
                     this.refreshImage();
+                    return;
                 }
             }
         });
