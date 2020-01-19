@@ -45,7 +45,31 @@ export default class MainPage {
         uploadBtn.addEventListener("click", () => uploader.click());
 
         this.gltihc.initDone.then(() => {
+            this.message("No image loaded");
             setDisabled(uploadBtn, false);
+        });
+
+        const dz = this.content.getElementById("drop-zone");
+        dz?.addEventListener("dragenter", (ev) => {
+            (<HTMLElement>ev.target)?.classList.add("drag-over");
+        });
+        dz?.addEventListener("dragleave", (ev) => {
+            (<HTMLElement>ev.target)?.classList.remove("drag-over");
+        });
+        dz?.addEventListener("dragover", (ev) => {
+            ev.preventDefault();
+        });
+        dz?.addEventListener("drop", (ev) => {
+            ev.preventDefault();
+            if (ev.dataTransfer) {
+                const file = ev.dataTransfer.items?.[0]?.kind === "file" ?
+                    ev.dataTransfer.items[0].getAsFile() :
+                    ev.dataTransfer.files?.[0];
+                if (file) {
+                    this.gltihc.source = file;
+                    this.refreshImage();
+                }
+            }
         });
     }
 

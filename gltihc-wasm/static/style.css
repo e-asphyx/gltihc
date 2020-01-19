@@ -18,6 +18,7 @@
     --heading-ratio: 1.19;
     --input-back-color: #444;
     --panel-ratio: 6.3;
+    --drag-over-back-color: #2b2b2b;
 }
 
 html, body {
@@ -310,6 +311,10 @@ form > .row > label {
     flex-shrink: 0;
     flex-grow: 0;
     min-width: 14em;
+}
+
+.drag-over {
+    background: var(--drag-over-back-color);
 }
 
 #target-img {
