@@ -6,6 +6,7 @@ function setDisabled(n, disabled) {
         n.removeAttribute("disabled");
     }
 }
+const CORS_PROXY = "https://cors-anywhere.herokuapp.com/";
 export default class MainPage {
     constructor(gltihc) {
         var _a, _b, _c, _d;
@@ -58,7 +59,7 @@ export default class MainPage {
             }
             const uri = dt.getData("text/uri-list") || dt.getData("text/plain");
             if (uri) {
-                fetch(uri).then((resp) => {
+                fetch(CORS_PROXY + uri).then((resp) => {
                     console.log(resp);
                     if (resp.ok) {
                         return resp.blob();
@@ -67,6 +68,7 @@ export default class MainPage {
                         throw new Error(resp.statusText);
                     }
                 }).then((blob) => {
+                    console.log(blob);
                     if (blob.type.match("^image/")) {
                         this.gltihc.source = blob;
                         this.refreshImage();
