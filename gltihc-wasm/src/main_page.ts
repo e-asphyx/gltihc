@@ -61,6 +61,7 @@ export default class MainPage {
         });
         dz?.addEventListener("drop", (ev) => {
             ev.preventDefault();
+            (<HTMLElement>ev.target)?.classList.remove("drag-over");
             const dt = ev.dataTransfer;
             if (!dt) {
                 return;
@@ -69,6 +70,7 @@ export default class MainPage {
             const uri = dt.getData("text/uri-list") || dt.getData("text/plain");
             if (uri) {
                 fetch(uri).then((resp) => {
+                    console.log(resp);
                     if (resp.ok) {
                         return resp.blob();
                     } else {
@@ -79,7 +81,7 @@ export default class MainPage {
                         this.gltihc.source = blob;
                         this.refreshImage();
                     }
-                });
+                }).catch((err) => this.message(String(err)));
                 return;
             }
             for (const f of dt.files) {
