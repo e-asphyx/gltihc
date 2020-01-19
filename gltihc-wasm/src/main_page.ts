@@ -8,6 +8,8 @@ function setDisabled(n: Element, disabled: boolean) {
     }
 }
 
+const CORS_PROXY = "https://cors-anywhere.herokuapp.com/";
+
 export default class MainPage {
     public readonly content: DocumentFragment;
     public readonly settingsBtn: HTMLInputElement;
@@ -69,7 +71,7 @@ export default class MainPage {
 
             const uri = dt.getData("text/uri-list") || dt.getData("text/plain");
             if (uri) {
-                fetch(uri).then((resp) => {
+                fetch(CORS_PROXY + uri).then((resp) => {
                     console.log(resp);
                     if (resp.ok) {
                         return resp.blob();
@@ -77,6 +79,8 @@ export default class MainPage {
                         throw new Error(resp.statusText);
                     }
                 }).then((blob) => {
+                    console.log(blob);
+
                     if (blob.type.match("^image/")) {
                         this.gltihc.source = blob;
                         this.refreshImage();
