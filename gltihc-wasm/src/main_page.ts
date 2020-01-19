@@ -61,13 +61,32 @@ export default class MainPage {
         });
         dz?.addEventListener("drop", (ev) => {
             ev.preventDefault();
-            if (ev.dataTransfer) {
-                const file = ev.dataTransfer.items?.[0]?.kind === "file" ?
-                    ev.dataTransfer.items[0].getAsFile() :
-                    ev.dataTransfer.files?.[0];
-                if (file) {
-                    this.gltihc.source = file;
+            const dt = ev.dataTransfer;
+            if (!dt) {
+                return;
+            }
+
+            const uri = dt.getData("text/uri-list") || dt.getData("text/plain");
+            if (uri) {
+                fetch(uri).then((resp) => {
+                    if (resp.ok) {
+                        return resp.blob();
+                    } else {
+                        throw new Error(resp.statusText);
+                    }
+                }).then((blob) => {
+                    if (blob.type.match("^image/")) {
+                        this.gltihc.source = blob;
+                        this.refreshImage();
+                    }
+                });
+                return;
+            }
+            for (const f of dt.files) {
+                if (f.type.match("^image/")) {
+                    this.gltihc.source = f;
                     this.refreshImage();
+                    return;
                 }
             }
         });

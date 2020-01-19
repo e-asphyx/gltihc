@@ -13,6 +13,7 @@ import (
 	"github.com/e-asphyx/gltihc/engine"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
 func processImageFunc(this js.Value, args []js.Value) interface{} {
