@@ -204,11 +204,7 @@ func (opt *Options) Apply(img image.Image) (image.Image, error) {
 					}
 					wg.Done()
 				}
-				if blocksPerThread == segBlocks {
-					worker(tstart, delta)
-				} else {
-					go worker(tstart, delta)
-				}
+				go worker(tstart, delta)
 			}
 			wg.Wait()
 

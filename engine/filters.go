@@ -855,6 +855,7 @@ type filterBitRasp struct {
 	mode  uint8
 	op    uint8
 	bits  uint8
+	ror   uint8
 	mask  uint8
 	alpha uint8
 }
@@ -902,7 +903,11 @@ func (f filterBitRasp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.
 			default:
 				mix = uint32(y) ^ uint32(x)
 			}
+
+			mix &= 0xff
+			mix = (mix >> f.ror) | ((mix << (8 - f.ror)) & 0xff)
 			mix = (mix & m) << 8
+
 			aa := sa
 			switch f.op {
 			case 0:
@@ -948,7 +953,7 @@ func (f filterBitRasp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.
 }
 
 func (f filterBitRasp) String() string {
-	return fmt.Sprintf("rasp:{m:%d,op:%d,b:%d,mask:%d,a:%d}", f.mode, f.op, f.bits, f.mask, f.alpha)
+	return fmt.Sprintf("rasp:{m:%d,op:%d,b:%d,mask:%d,a:%d,r:%d}", f.mode, f.op, f.bits, f.mask, f.alpha, f.ror)
 }
 
 func newFilterBitRasp(opt *FilterOptions) Filter {
@@ -956,6 +961,7 @@ func newFilterBitRasp(opt *FilterOptions) Filter {
 		mode:  uint8(rand.Intn(7)),
 		op:    uint8(rand.Intn(4)),
 		alpha: uint8(rand.Intn(2)),
+		ror:   uint8(rand.Intn(8)),
 	}
 	if rand.Intn(2) == 1 {
 		ret.bits = uint8(2 + rand.Intn(7))
