@@ -854,20 +854,13 @@ func newFilterGrayscale(opt *FilterOptions) Filter { return filterGrayscale{} }
 type filterBitRasp struct {
 	mode  uint8
 	op    uint8
-	bits  uint8
 	ror   uint8
 	mask  uint8
 	alpha uint8
 }
 
 func (f filterBitRasp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.NRGBA64, sp image.Point, op Operation) {
-	var m uint32
-	if f.bits != 0 {
-		m = (uint32(1) << f.bits) - 1
-	} else {
-		m = uint32(f.mask)
-	}
-
+	m := uint32(f.mask)
 	si := sp.Y*src.Stride + (sp.X << 3)
 	di := dr.Min.Y*dst.Stride + (dr.Min.X << 3)
 	w := dr.Dx()
@@ -953,7 +946,7 @@ func (f filterBitRasp) Apply(dst *image.NRGBA64, dr image.Rectangle, src *image.
 }
 
 func (f filterBitRasp) String() string {
-	return fmt.Sprintf("rasp:{m:%d,op:%d,b:%d,mask:%d,a:%d,r:%d}", f.mode, f.op, f.bits, f.mask, f.alpha, f.ror)
+	return fmt.Sprintf("rasp:{m:%d,op:%d,mask:%d,a:%d,r:%d}", f.mode, f.op, f.mask, f.alpha, f.ror)
 }
 
 func newFilterBitRasp(opt *FilterOptions) Filter {
@@ -963,8 +956,10 @@ func newFilterBitRasp(opt *FilterOptions) Filter {
 		alpha: uint8(rand.Intn(2)),
 		ror:   uint8(rand.Intn(8)),
 	}
+
 	if rand.Intn(2) == 1 {
-		ret.bits = uint8(2 + rand.Intn(7))
+		bits := 2 + rand.Intn(7)
+		ret.mask = (1 << bits) - 1
 	} else {
 		ret.mask = uint8(rand.Intn(256))
 	}
